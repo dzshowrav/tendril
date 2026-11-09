@@ -79,7 +79,8 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
 
           case 'tool.start':
             if (!isJson) {
-              renderer.renderToolStart(event.data.tool, event.data.input || {});
+              const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+              renderer.renderToolStart(toolName, event.data.input || {});
             }
             break;
 
@@ -91,7 +92,10 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
 
           case 'tool.end':
             if (!isJson) {
-              renderer.renderToolEnd(event.data.tool, event.data.success, event.data.summary);
+              const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+              const isSuccess = (event.data as any).status === 'ok' || (event.data as any).success === true;
+              const summary = (event.data as any).summary || (event.data as any).resultPreview;
+              renderer.renderToolEnd(toolName, isSuccess, summary);
             }
             break;
 
@@ -102,6 +106,7 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
             break;
 
           case 'tool.permission': {
+            const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
             // When stdin is not TTY, automatically deny to prevent hanging
             if (!process.stdin.isTTY) {
               await client.resolvePermission(
@@ -114,7 +119,7 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
             } else {
               // Interactive prompt
               process.stdout.write(
-                renderer.renderPermissionPrompt(event.data.tool, event.data.summary || ''),
+                renderer.renderPermissionPrompt(toolName, event.data.summary || ''),
               );
 
               // Single keypress in raw mode
@@ -231,7 +236,8 @@ function readSingleKey(validKeys: string[]): Promise<string> {
     process.stdin.resume();
 
     const onData = (buffer: Buffer) => {
-      const char = buffer.toString().toLowerCase();
+      const text = buffer.toString().trim().toLowerCase();
+      const char = text.charAt(0);
       if (validKeys.includes(char)) {
         process.stdin.removeListener('data', onData);
         if (process.stdin.setRawMode) {

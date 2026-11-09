@@ -114,17 +114,23 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
             renderer.renderTextDelta(event.data.text || '');
             break;
 
-          case 'tool.start':
-            renderer.renderToolStart(event.data.tool, event.data.input || {});
+          case 'tool.start': {
+            const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+            renderer.renderToolStart(toolName, event.data.input || {});
             break;
+          }
 
           case 'tool.output':
             renderer.renderToolOutput(event.data.chunk || '');
             break;
 
-          case 'tool.end':
-            renderer.renderToolEnd(event.data.tool, event.data.success, event.data.summary);
+          case 'tool.end': {
+            const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+            const isSuccess = (event.data as any).status === 'ok' || (event.data as any).success === true;
+            const summary = (event.data as any).summary || (event.data as any).resultPreview;
+            renderer.renderToolEnd(toolName, isSuccess, summary);
             break;
+          }
 
           case 'usage':
             renderer.renderUsage(event.data.inputTokens, event.data.outputTokens);
@@ -133,8 +139,9 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
           case 'tool.permission': {
             renderer.stopSpinner();
             rl.pause();
+            const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
             process.stdout.write(
-              renderer.renderPermissionPrompt(event.data.tool, event.data.summary || ''),
+              renderer.renderPermissionPrompt(toolName, event.data.summary || ''),
             );
 
             const answer = await readSingleKey(['y', 'a', 'n', 'd']);
@@ -477,7 +484,8 @@ function readSingleKey(validKeys: string[]): Promise<string> {
     process.stdin.resume();
 
     const onData = (buffer: Buffer) => {
-      const char = buffer.toString().toLowerCase();
+      const text = buffer.toString().trim().toLowerCase();
+      const char = text.charAt(0);
       if (validKeys.includes(char)) {
         process.stdin.removeListener('data', onData);
         if (process.stdin.setRawMode) {

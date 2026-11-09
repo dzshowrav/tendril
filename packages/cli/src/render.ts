@@ -87,30 +87,32 @@ export class EventRenderer {
     }
   }
 
-  public renderToolStart(tool: string, input: Record<string, unknown>): void {
+  public renderToolStart(tool?: string, input?: Record<string, unknown>): void {
     this.stopSpinner();
     const s = getSymbols();
-    this.currentTool = tool;
+    const toolName = tool || this.currentTool || 'tool';
+    this.currentTool = toolName;
     this.toolOutputLines = [];
     this.toolStartTime = Date.now();
 
+    const inp = input || {};
     let argSummary = '';
-    if (tool === 'read_file' || tool === 'write_file' || tool === 'edit_file') {
-      argSummary = String(input.path || input.filePath || '');
-    } else if (tool === 'list_dir') {
-      argSummary = String(input.path || '.');
-    } else if (tool === 'glob' || tool === 'grep') {
-      argSummary = String(input.pattern || '');
-    } else if (tool === 'bash') {
-      argSummary = String(input.command || '');
-    } else if (tool === 'web_fetch') {
-      argSummary = String(input.url || '');
+    if (toolName === 'read_file' || toolName === 'write_file' || toolName === 'edit_file') {
+      argSummary = String(inp.path || inp.filePath || '');
+    } else if (toolName === 'list_dir') {
+      argSummary = String(inp.path || '.');
+    } else if (toolName === 'glob' || toolName === 'grep') {
+      argSummary = String(inp.pattern || '');
+    } else if (toolName === 'bash') {
+      argSummary = String(inp.command || '');
+    } else if (toolName === 'web_fetch') {
+      argSummary = String(inp.url || '');
     } else {
-      argSummary = JSON.stringify(input);
+      argSummary = JSON.stringify(inp);
     }
 
-    const icon = tool === 'bash' ? s.gear : tool.includes('file') ? s.zap : s.tool;
-    this.out(`\n${theme.secondary(`${icon} ${tool}`)} ${theme.muted(argSummary)}\n`);
+    const icon = toolName === 'bash' ? s.gear : toolName.includes('file') ? s.zap : s.tool;
+    this.out(`\n${theme.secondary(`${icon} ${toolName}`)} ${theme.muted(argSummary)}\n`);
   }
 
   public renderToolOutput(chunk: string): void {
@@ -123,16 +125,18 @@ export class EventRenderer {
     }
   }
 
-  public renderToolEnd(tool: string, success: boolean, summary?: string): void {
+  public renderToolEnd(tool?: string, success?: boolean, summary?: string): void {
     this.stopSpinner();
     const s = getSymbols();
+    const toolName = tool || this.currentTool || 'tool';
     const elapsedMs = this.toolStartTime > 0 ? Date.now() - this.toolStartTime : 0;
     const timeStr = elapsedMs > 0 ? ` (${elapsedMs}ms)` : '';
 
-    if (!success) {
+    const isSuccess = success !== false;
+    if (!isSuccess) {
       this.out(`  ${theme.fail(summary || 'Tool execution failed')}${theme.muted(timeStr)}\n`);
-    } else if (summary) {
-      this.out(`  ${theme.muted(`${s.arrow} ${summary}${timeStr}`)}\n`);
+    } else {
+      this.out(`  ${theme.muted(`${s.arrow} ${summary || 'Completed'}${timeStr}`)}\n`);
     }
     this.currentTool = null;
     this.toolOutputLines = [];

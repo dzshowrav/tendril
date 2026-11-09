@@ -68,6 +68,7 @@ export type TendrilEvent =
         toolRunId: string;
         messageId: string;
         name: string;
+        tool?: string;
         input: Record<string, unknown>;
         summary: string;
       };
@@ -88,6 +89,7 @@ export type TendrilEvent =
         requestId: string;
         toolRunId: string;
         name: string;
+        tool?: string;
         summary: string;
         input: Record<string, unknown>;
         options: {
@@ -111,8 +113,12 @@ export type TendrilEvent =
       sessionId: string;
       data: {
         toolRunId: string;
+        name?: string;
+        tool?: string;
         status: 'ok' | 'error' | 'denied';
+        success?: boolean;
         resultPreview: string;
+        summary?: string;
         changeId?: string;
         exitCode?: number | null;
         durationMs?: number;

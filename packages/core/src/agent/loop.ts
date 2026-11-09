@@ -389,6 +389,7 @@ export class Agent {
               toolRunId: toolRun.id,
               messageId: savedAssistant.id,
               name: t.name,
+              tool: t.name,
               input: inputObj,
               summary,
             },
@@ -444,6 +445,7 @@ export class Agent {
                 requestId: req.id,
                 toolRunId: toolRun.id,
                 name: t.name,
+                tool: t.name,
                 summary,
                 input: inputObj,
                 options: {
@@ -503,8 +505,12 @@ export class Agent {
               sessionId,
               data: {
                 toolRunId: toolRun.id,
+                name: t.name,
+                tool: t.name,
                 status: 'denied',
+                success: false,
                 resultPreview: denialReason || 'Denied',
+                summary: denialReason || 'Denied',
               },
             });
 
@@ -589,8 +595,12 @@ export class Agent {
               sessionId,
               data: {
                 toolRunId: toolRun.id,
+                name: t.name,
+                tool: t.name,
                 status: 'ok',
+                success: true,
                 resultPreview,
+                summary: resultPreview.slice(0, 100),
                 changeId,
                 exitCode,
                 durationMs,
@@ -622,8 +632,12 @@ export class Agent {
               sessionId,
               data: {
                 toolRunId: toolRun.id,
+                name: t.name,
+                tool: t.name,
                 status: 'error',
+                success: false,
                 resultPreview: errorMsg.slice(0, 500),
+                summary: errorMsg.slice(0, 100),
                 durationMs,
               },
             });
