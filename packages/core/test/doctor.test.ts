@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { parseSemver, checkNodeVersion, checkSqlite, checkTermux, runDoctor } from '../src/doctor.js';
+import {
+  parseSemver,
+  checkNodeVersion,
+  checkSqlite,
+  checkGit,
+  checkRipgrep,
+  checkTermux,
+  checkStoragePermission,
+  checkTermuxApiSupport,
+  checkAllowExternalApps,
+  checkWakeLock,
+  checkBatteryOptimization,
+  runDoctor,
+} from '../src/doctor.js';
 
 describe('doctor module', () => {
   it('parses semver versions correctly', () => {
@@ -23,15 +36,66 @@ describe('doctor module', () => {
     expect(res.message).toContain('DatabaseSync');
   });
 
-  it('checks termux detection', () => {
-    const res = checkTermux();
-    expect(['PASS', 'WARN']).toContain(res.status);
-    expect(res.message).toBeDefined();
+  it('checks git and ripgrep tools', () => {
+    const gitRes = checkGit();
+    expect(['PASS', 'FAIL']).toContain(gitRes.status);
+    const rgRes = checkRipgrep();
+    expect(['PASS', 'WARN']).toContain(rgRes.status);
   });
 
-  it('runs doctor aggregate check successfully', async () => {
+  it('checks termux detection and non-termux desktop mode', () => {
+    const res = checkTermux();
+    expect(res.status).toBe('PASS');
+    expect(typeof res.isTermux).toBe('boolean');
+    expect(res.message).toBeDefined();
+
+    // In desktop mode (isTermux: false), device checks return PASS
+    expect(checkStoragePermission(false).status).toBe('PASS');
+    expect(checkTermuxApiSupport(false).status).toBe('PASS');
+    expect(checkAllowExternalApps(false).status).toBe('PASS');
+    expect(checkWakeLock(false).status).toBe('PASS');
+    expect(checkBatteryOptimization(false).status).toBe('PASS');
+  });
+
+  it('warns (does not fail) when Termux:API is missing in Termux', () => {
+    const originalEnv = process.env.TENDRIL_MOCK_TERMUX_API;
+    try {
+      process.env.TENDRIL_MOCK_TERMUX_API = 'false';
+      const check = checkTermuxApiSupport(true);
+      expect(check.status).toBe('WARN');
+      expect(check.fix).toBeDefined();
+    } finally {
+      process.env.TENDRIL_MOCK_TERMUX_API = originalEnv;
+    }
+  });
+
+  it('passes when Termux:API is available in Termux', () => {
+    const originalEnv = process.env.TENDRIL_MOCK_TERMUX_API;
+    try {
+      process.env.TENDRIL_MOCK_TERMUX_API = 'true';
+      const check = checkTermuxApiSupport(true);
+      expect(check.status).toBe('PASS');
+    } finally {
+      process.env.TENDRIL_MOCK_TERMUX_API = originalEnv;
+    }
+  });
+
+  it('runs doctor aggregate check successfully with 10 checks', async () => {
     const res = await runDoctor();
-    expect(res.checks.length).toBe(3);
-    expect(res.ok).toBe(true);
+    expect(res.checks.length).toBe(10);
+    expect(typeof res.ok).toBe('boolean');
+    const ids = res.checks.map((c) => c.id);
+    expect(ids).toEqual([
+      'node_version',
+      'sqlite',
+      'git',
+      'ripgrep',
+      'termux',
+      'storage_permission',
+      'termux_api',
+      'allow_external_apps',
+      'wake_lock',
+      'battery_optimization',
+    ]);
   });
 });

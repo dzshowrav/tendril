@@ -15,6 +15,8 @@ import {
   editFileTool,
   bashTool,
   webFetchTool,
+  termuxApiTool,
+  isTermuxApiAvailable,
 } from '@tendril/core';
 import { TendrilEnv, ServerOptions } from './types.js';
 import {
@@ -43,6 +45,9 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(editFileTool);
   registry.register(bashTool);
   registry.register(webFetchTool);
+  if (isTermuxApiAvailable()) {
+    registry.register(termuxApiTool);
+  }
   return registry;
 }
 
