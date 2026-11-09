@@ -62,15 +62,68 @@ jobs:
       - name: Run Android Shell Lint
         run: node scripts/lint-shell.mjs
 
-      - name: Build Debug APK with Gradle
+      - name: Build APKs with Gradle
         run: |
           cd apps/android-shell
           chmod +x gradlew
-          ./gradlew lint assembleDebug
+          ./gradlew lint assembleRelease assembleDebug
+
+      - name: Sign & Package Release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using provided keystore secret..."
+            echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+            STORE_PASS="$KEYSTORE_PASSWORD"
+            ALIAS="$KEY_ALIAS"
+            KEY_PASS="$KEY_PASSWORD"
+          else
+            echo "Generating release signing keypair..."
+            keytool -genkeypair -v \
+              -keystore release.keystore \
+              -alias tendril \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass tendril123 \
+              -keypass tendril123 \
+              -dname "CN=Tendril, OU=Development, O=Tendril, L=Android, S=Termux, C=US"
+            STORE_PASS="tendril123"
+            ALIAS="tendril"
+            KEY_PASS="tendril123"
+          fi
+
+          RELEASE_UNSIGNED="apps/android-shell/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ ! -f "$RELEASE_UNSIGNED" ]; then
+            RELEASE_UNSIGNED="apps/android-shell/app/build/outputs/apk/release/app-release.apk"
+          fi
+
+          echo "Signing release APK with apksigner..."
+          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            --ks release.keystore \
+            --ks-pass pass:"$STORE_PASS" \
+            --ks-key-alias "$ALIAS" \
+            --key-pass pass:"$KEY_PASS" \
+            --out tendril-shell-release.apk \
+            "$RELEASE_UNSIGNED"
+
+          echo "Verifying signed APK..."
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose --print-certs tendril-shell-release.apk
+
+          cp apps/android-shell/app/build/outputs/apk/debug/app-debug.apk tendril-shell-debug.apk
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tendril-shell-release
+          path: tendril-shell-release.apk
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: tendril-shell-debug
-          path: apps/android-shell/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: warn
+          path: tendril-shell-debug.apk

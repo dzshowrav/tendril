@@ -112,23 +112,45 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
             echo "Decoding release keystore..."
             echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-            $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-              --ks release.keystore \
-              --ks-pass pass:"$KEYSTORE_PASSWORD" \
-              --ks-key-alias "$KEY_ALIAS" \
-              --key-pass pass:"$KEY_PASSWORD" \
-              --out release-artifacts/tendril-shell-release.apk \
-              apps/android-shell/app/build/outputs/apk/release/app-release-unsigned.apk
-            
-            echo "Release APK signed successfully."
-            FINGERPRINT=$($ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs release-artifacts/tendril-shell-release.apk | grep "SHA-256 digest" | head -n 1 | awk '{print $3}')
-            echo "FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
-            rm -f release.keystore
+            STORE_PASS="$KEYSTORE_PASSWORD"
+            ALIAS="$KEY_ALIAS"
+            KEY_PASS="$KEY_PASSWORD"
           else
-            echo "Release keystore secrets not configured; using debug APK as companion."
-            cp release-artifacts/tendril-shell-debug.apk release-artifacts/tendril-shell-release.apk
-            echo "FINGERPRINT=debug-keystore" >> $GITHUB_ENV
+            echo "Release keystore secrets not provided. Generating dedicated release signing key..."
+            keytool -genkeypair -v \
+              -keystore release.keystore \
+              -alias tendril \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass tendril123 \
+              -keypass tendril123 \
+              -dname "CN=Tendril, OU=Release, O=Tendril, L=Android, S=Termux, C=US"
+            STORE_PASS="tendril123"
+            ALIAS="tendril"
+            KEY_PASS="tendril123"
           fi
+
+          RELEASE_UNSIGNED="apps/android-shell/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ ! -f "$RELEASE_UNSIGNED" ]; then
+            RELEASE_UNSIGNED="apps/android-shell/app/build/outputs/apk/release/app-release.apk"
+          fi
+
+          echo "Signing release APK with apksigner..."
+          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            --ks release.keystore \
+            --ks-pass pass:"$STORE_PASS" \
+            --ks-key-alias "$ALIAS" \
+            --key-pass pass:"$KEY_PASS" \
+            --out release-artifacts/tendril-shell-release.apk \
+            "$RELEASE_UNSIGNED"
+
+          echo "Verifying signed release APK..."
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose --print-certs release-artifacts/tendril-shell-release.apk
+
+          FINGERPRINT=$($ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs release-artifacts/tendril-shell-release.apk | grep "SHA-256 digest" | head -n 1 | awk '{print $3}')
+          echo "FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
+          rm -f release.keystore
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
