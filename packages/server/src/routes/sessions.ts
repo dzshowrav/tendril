@@ -10,10 +10,16 @@ import {
   SessionMode,
   createId,
   runCompaction,
+  PermissionEngine,
+  loadConfig,
+  loadAuth,
+  getEffectiveApiKey,
+  createProviderAdapter,
+  getPreset,
+  getTendrilPaths,
 } from '@tendril/core';
 import { TendrilEnv } from '../types.js';
 import { SSEHub, SSEClientConnection } from '../sse-hub.js';
-import { PermissionEngine } from '@tendril/core';
 
 export function createSessionRoutes(options: {
   db: DatabaseStore;
@@ -21,9 +27,12 @@ export function createSessionRoutes(options: {
   permissionEngine: PermissionEngine;
   toolRegistry: ToolRegistry;
   providerAdapter: ProviderAdapter;
+  isExplicitProvider?: boolean;
+  configPath?: string;
+  authPath?: string;
 }): Hono<TendrilEnv> {
   const router = new Hono<TendrilEnv>();
-  const { db, sseHub, permissionEngine, toolRegistry, providerAdapter } = options;
+  const { db, sseHub, permissionEngine, toolRegistry, providerAdapter, isExplicitProvider, configPath, authPath } = options;
 
   // Active turn abort controllers (sessionId -> AbortController)
   const activeControllers = new Map<string, AbortController>();
@@ -72,13 +81,24 @@ export function createSessionRoutes(options: {
       );
     }
 
+    const paths = getTendrilPaths();
+    const cfgPath = configPath || paths.configPath;
+    let config = { defaultProvider: 'anthropic', defaultModel: 'claude-sonnet-5-5', defaultMode: 'ask' as SessionMode };
+    try {
+      config = loadConfig(cfgPath);
+    } catch {}
+
+    const providerId = body.provider || config.defaultProvider || 'anthropic';
+    const model = body.model || config.defaultModel || 'claude-sonnet-5-5';
+    const mode = (body.mode as SessionMode) || config.defaultMode || 'ask';
+
     const session = db.createSession({
       id: createId(),
       title: body.title || 'New Session',
       workspace_path: workspace,
-      provider_id: body.provider || 'anthropic',
-      model: body.model || 'claude-3-7-sonnet',
-      mode: (body.mode as SessionMode) || 'ask',
+      provider_id: providerId,
+      model: model,
+      mode: mode,
     });
 
     return c.json({ session }, 201);
@@ -194,9 +214,51 @@ export function createSessionRoutes(options: {
       );
     }
 
+    let activeAdapter = providerAdapter;
+    if (!isExplicitProvider && process.env.TENDRIL_MOCK_PROVIDER !== '1') {
+      try {
+        const paths = getTendrilPaths();
+        const cfgPath = configPath || paths.configPath;
+        const aPath = authPath || paths.authPath;
+        const config = loadConfig(cfgPath);
+        const auth = loadAuth(aPath);
+
+        let targetProviderId = session.provider_id || config.defaultProvider;
+        if (!auth.providers[targetProviderId] && auth.providers[config.defaultProvider]) {
+          targetProviderId = config.defaultProvider;
+          try {
+            db.updateSession(id, {
+              provider_id: config.defaultProvider,
+              model: config.defaultModel,
+            });
+          } catch {}
+        }
+
+        const pAuth = auth.providers[targetProviderId];
+        const effectiveKey = getEffectiveApiKey(targetProviderId, auth);
+
+        if (pAuth) {
+          activeAdapter = createProviderAdapter(pAuth.type, {
+            apiKey: effectiveKey || '',
+            baseUrl: pAuth.baseUrl,
+          });
+        } else {
+          const preset = getPreset(targetProviderId);
+          if (preset && effectiveKey) {
+            activeAdapter = createProviderAdapter(preset.type, {
+              apiKey: effectiveKey,
+              baseUrl: preset.baseUrl,
+            });
+          }
+        }
+      } catch {
+        // Fallback to default adapter if resolution throws
+      }
+    }
+
     const agent = new Agent({
       db,
-      provider: providerAdapter,
+      provider: activeAdapter,
       toolRegistry,
       permissionEngine,
       readTracker,
@@ -216,9 +278,22 @@ export function createSessionRoutes(options: {
           signal: controller.signal,
         });
       } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        try {
+          db.createMessage({
+            session_id: id,
+            role: 'assistant',
+            content_json: JSON.stringify([{ type: 'text', text: `⚠️ ${errMsg}` }]),
+            origin,
+          });
+          sseHub.publish(id, 'text.delta', {
+            messageId: createId(),
+            text: `\n\n⚠️ ${errMsg}\n`,
+          });
+        } catch {}
         sseHub.publish(id, 'error', {
           code: 'agent_error',
-          message: err?.message || String(err),
+          message: errMsg,
           retryable: false,
         });
       } finally {

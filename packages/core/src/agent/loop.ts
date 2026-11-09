@@ -291,6 +291,9 @@ export class Agent {
                 contextWindow: this.contextWindow,
               },
             });
+          } else if (event.type === 'error') {
+            const err = event.error instanceof Error ? event.error : new Error(String(event.error));
+            throw err;
           } else if (event.type === 'stop') {
             stopReason = event.reason;
           }

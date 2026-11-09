@@ -33,6 +33,7 @@ import { createSessionRoutes } from './routes/sessions.js';
 import { createChangesRoutes } from './routes/changes.js';
 import { createFilesRoutes } from './routes/files.js';
 import { createSettingsRoutes } from './routes/settings.js';
+import { resolveDefaultStaticDir } from './static.js';
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -67,6 +68,11 @@ export function createServerApp(options: ServerOptions): {
     providerAdapter,
     toolRegistry = createDefaultToolRegistry(),
   } = options;
+
+  const resolvedStaticDir =
+    (staticDir && existsSync(staticDir))
+      ? staticDir
+      : resolveDefaultStaticDir();
 
   const app = new Hono<TendrilEnv>();
   const sseHub = new SSEHub(db);
@@ -153,6 +159,9 @@ export function createServerApp(options: ServerOptions): {
     permissionEngine,
     toolRegistry,
     providerAdapter: activeProvider,
+    isExplicitProvider: !!providerAdapter,
+    configPath,
+    authPath,
   });
   const changesRoutes = createChangesRoutes({ db });
   const filesRoutes = createFilesRoutes({ db });
@@ -171,9 +180,9 @@ export function createServerApp(options: ServerOptions): {
       return c.json({ error: { code: 'not_found', message: 'API route not found' } }, 404);
     }
 
-    if (staticDir && existsSync(staticDir)) {
+    if (resolvedStaticDir && existsSync(resolvedStaticDir)) {
       const target = path === '/' ? 'index.html' : path.slice(1);
-      const filePath = join(staticDir, target);
+      const filePath = join(resolvedStaticDir, target);
 
       if (existsSync(filePath) && statSync(filePath).isFile()) {
         const ext = extname(filePath);
@@ -186,7 +195,7 @@ export function createServerApp(options: ServerOptions): {
       }
 
       // SPA fallback to index.html
-      const indexPath = join(staticDir, 'index.html');
+      const indexPath = join(resolvedStaticDir, 'index.html');
       if (existsSync(indexPath)) {
         const indexHtml = readFileSync(indexPath, 'utf8');
         c.res.headers.set('Content-Type', 'text/html; charset=utf-8');

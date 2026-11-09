@@ -1,7 +1,8 @@
 import http from 'node:http';
 import net from 'node:net';
-import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, renameSync, realpathSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { serve } from '@hono/node-server';
@@ -19,6 +20,7 @@ import {
 import { createServerApp } from './app.js';
 import { SSEHub } from './sse-hub.js';
 import { PairingManager } from './pairing.js';
+import { resolveDefaultStaticDir } from './static.js';
 import { PermissionEngine } from '@tendril/core';
 import { Hono } from 'hono';
 import { TendrilEnv } from './types.js';
@@ -278,22 +280,7 @@ export function deleteDaemonState(paths: TendrilPaths): void {
 /**
  * Starts the Tendril daemon server.
  */
-/**
- * Resolves default static web directory if not explicitly provided.
- */
-export function resolveDefaultStaticDir(): string | undefined {
-  const candidates = [
-    join(process.cwd(), 'dist/assets/web'),
-    join(process.cwd(), 'packages/cli/assets/web'),
-    join(process.cwd(), 'packages/web/dist'),
-  ];
-  for (const c of candidates) {
-    if (existsSync(join(c, 'index.html'))) {
-      return c;
-    }
-  }
-  return undefined;
-}
+export { resolveDefaultStaticDir };
 
 export async function startDaemon(options: StartDaemonOptions = {}): Promise<DaemonInstance> {
   const paths = getTendrilPaths(options.customHome);
