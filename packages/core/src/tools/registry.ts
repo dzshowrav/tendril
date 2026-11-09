@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ToolClass } from '../store.js';
+import { ToolClass, DatabaseStore } from '../store.js';
 import { ToolSpec } from '../providers/types.js';
 import { WorkspaceGuard } from '../workspace.js';
 import { ReadTracker } from '../read-tracker.js';
@@ -8,7 +8,10 @@ export interface ToolContext {
   sessionId: string;
   workspace: WorkspaceGuard;
   readTracker: ReadTracker;
+  db?: DatabaseStore;
+  toolRunId?: string;
   signal?: AbortSignal;
+  onOutput?: (chunk: string) => void;
 }
 
 export interface ToolDefinition<TInput = any, TOutput = any> {

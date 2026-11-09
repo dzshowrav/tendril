@@ -16,7 +16,7 @@ export const ReadFileInputSchema = z.object({
   limit: z.number().int().min(1).max(5000).optional().default(2000).describe('Maximum number of lines to read (default: 2000)'),
 });
 
-export type ReadFileInput = z.infer<typeof ReadFileInputSchema>;
+export type ReadFileInput = z.input<typeof ReadFileInputSchema>;
 
 export interface ReadFileOutput {
   path: string;
@@ -48,7 +48,8 @@ export const readFileTool: ToolDefinition<ReadFileInput, string> = {
   class: 'read',
   description: 'Read contents of a text file within workspace with line numbering and 2MB limit',
   schema: ReadFileInputSchema,
-  execute: async (input, context) => {
+  execute: async (rawInput, context) => {
+    const input = ReadFileInputSchema.parse(rawInput);
     const canonical = context.workspace.resolvePath(input.path);
 
     if (!existsSync(canonical)) {
@@ -106,14 +107,15 @@ export const ListDirInputSchema = z.object({
   path: z.string().optional().default('.').describe('Directory path relative to workspace (default: .)'),
 });
 
-export type ListDirInput = z.infer<typeof ListDirInputSchema>;
+export type ListDirInput = z.input<typeof ListDirInputSchema>;
 
 export const listDirTool: ToolDefinition<ListDirInput, string> = {
   name: 'list_dir',
   class: 'read',
   description: 'List contents of a directory (non-recursive, dirs first, max 500 entries)',
   schema: ListDirInputSchema,
-  execute: async (input, context) => {
+  execute: async (rawInput, context) => {
+    const input = ListDirInputSchema.parse(rawInput);
     const canonical = context.workspace.resolvePath(input.path);
 
     if (!existsSync(canonical)) {
@@ -184,14 +186,15 @@ export const GlobInputSchema = z.object({
   path: z.string().optional().default('.').describe('Base directory to search in (default: .)'),
 });
 
-export type GlobInput = z.infer<typeof GlobInputSchema>;
+export type GlobInput = z.input<typeof GlobInputSchema>;
 
 export const globTool: ToolDefinition<GlobInput, string> = {
   name: 'glob',
   class: 'read',
   description: 'Search files matching a glob pattern (respects gitignore, max 500 results)',
   schema: GlobInputSchema,
-  execute: async (input, context) => {
+  execute: async (rawInput, context) => {
+    const input = GlobInputSchema.parse(rawInput);
     const canonical = context.workspace.resolvePath(input.path);
 
     if (!existsSync(canonical) || !statSync(canonical).isDirectory()) {
@@ -231,7 +234,7 @@ export const GrepInputSchema = z.object({
   ignoreCase: z.boolean().optional().default(false).describe('Case-insensitive search (default: false)'),
 });
 
-export type GrepInput = z.infer<typeof GrepInputSchema>;
+export type GrepInput = z.input<typeof GrepInputSchema>;
 
 export interface GrepMatchItem {
   file: string; // relative to workspace
@@ -397,7 +400,8 @@ export const grepTool: ToolDefinition<GrepInput, string> = {
   class: 'read',
   description: 'Search pattern across files (uses rg when available with JS fallback, max 200 matches)',
   schema: GrepInputSchema,
-  execute: async (input, context) => {
+  execute: async (rawInput, context) => {
+    const input = GrepInputSchema.parse(rawInput);
     const canonical = context.workspace.resolvePath(input.path);
 
     let matches: GrepMatchItem[] = [];
