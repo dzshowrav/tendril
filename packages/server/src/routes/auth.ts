@@ -83,7 +83,10 @@ export function createAuthRoutes(options: {
     }
 
     const { code, expiresAt } = pairingManager.createPairingCode();
-    const url = `http://127.0.0.1:${port}/pair#code=${code}`;
+    const hostHeader = c.req.header('host') || '';
+    const hostPort = hostHeader.includes(':') ? parseInt(hostHeader.split(':')[1], 10) : undefined;
+    const effectivePort = hostPort || port || 7421;
+    const url = `http://127.0.0.1:${effectivePort}/pair#code=${code}`;
 
     return c.json({
       code,
