@@ -9,6 +9,8 @@ export interface PendingPermission {
   parameters: Record<string, unknown>;
   rulePattern: string;
   created_at: string;
+  canAllowAlways?: boolean;
+  disallowReason?: string;
 }
 
 interface SessionState {
@@ -132,6 +134,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                   parameters: event.data.input || {},
                   rulePattern: event.data.rulePattern || '',
                   created_at: new Date().toISOString(),
+                  canAllowAlways: (event.data as any).options?.canAllowAlways !== false,
+                  disallowReason: (event.data as any).options?.disallowAlwaysReason,
                 },
                 turnStatus: 'awaiting_permission',
               });

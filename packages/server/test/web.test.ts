@@ -422,6 +422,56 @@ describe('Step 10: Web UI & Server Integration Tests', () => {
     cliSSE.close();
   });
 
+  it('gracefully downgrades allow_always to allow_once for compound commands without 500 error', async () => {
+    const sessionRes = await fetch(`${baseUrl}/api/sessions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${daemon.cliToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ workspace: tmpWorkspace, title: 'Compound Perm Test' }),
+    });
+    const { session } = await sessionRes.json();
+
+    const reqPromise = daemon.permissionEngine.registry.createRequest({
+      sessionId: session.id,
+      toolRunId: 'tr_compound_1',
+      tool: 'bash',
+      toolClass: 'exec',
+      input: { command: 'ls -la 2>/dev/null || echo "not found"' },
+      workspacePath: tmpWorkspace,
+      normalizedPattern: null,
+      canAllowAlways: false,
+      disallowAlwaysReason: 'Compound commands cannot be saved as permanent rules',
+    });
+
+    const pendingList = daemon.permissionEngine.registry.listPending(session.id);
+    expect(pendingList.length).toBe(1);
+    const requestId = pendingList[0].id;
+
+    const res = await fetch(
+      `${baseUrl}/api/sessions/${session.id}/permissions/${requestId}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemon.cliToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision: 'allow_always' }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.decision).toBe('allow_once');
+    expect(data.downgraded).toBe(true);
+    expect(data.warning).toContain('Cannot save');
+
+    const resolved = await reqPromise;
+    expect(resolved.decision).toBe('allow_once');
+  });
+
   // 5. Reconnect & Stream Resync with Last-Event-ID
   it('replays missed events after reconnecting with Last-Event-ID without duplicating existing messages', async () => {
     // Create session

@@ -174,8 +174,17 @@ export class EventRenderer {
     }
   }
 
-  public renderPermissionPrompt(tool: string, summary: string): string {
+  public renderPermissionPrompt(
+    tool: string,
+    summary: string,
+    opts?: { canAllowAlways?: boolean; reason?: string },
+  ): string {
     this.stopSpinner();
-    return theme.permissionCard({ tool, target: summary });
+    return theme.permissionCard({
+      tool,
+      target: summary,
+      canAllowAlways: opts?.canAllowAlways,
+      reason: opts?.reason,
+    });
   }
 }

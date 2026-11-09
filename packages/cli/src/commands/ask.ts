@@ -107,6 +107,9 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
 
           case 'tool.permission': {
             const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+            const canAllowAlways = (event.data as any).options?.canAllowAlways !== false;
+            const disallowReason = (event.data as any).options?.disallowAlwaysReason;
+
             // When stdin is not TTY, automatically deny to prevent hanging
             if (!process.stdin.isTTY) {
               await client.resolvePermission(
@@ -119,19 +122,46 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
             } else {
               // Interactive prompt
               process.stdout.write(
-                renderer.renderPermissionPrompt(toolName, event.data.summary || ''),
+                renderer.renderPermissionPrompt(toolName, event.data.summary || '', {
+                  canAllowAlways,
+                  reason: disallowReason,
+                }),
               );
 
               // Single keypress in raw mode
-              const answer = await readSingleKey(['y', 'a', 'n']);
+              const allowedKeys = canAllowAlways ? ['y', 'a', 'n'] : ['y', 'n'];
+              const answer = await readSingleKey(allowedKeys);
               process.stdout.write(`${answer}\n`);
 
+              const resolveSafe = async (
+                decision: 'allow_once' | 'allow_always' | 'deny',
+                note?: string,
+              ) => {
+                try {
+                  const res = await client.resolvePermission(
+                    session.id,
+                    event.data.requestId,
+                    decision,
+                    note,
+                  );
+                  if ((res as any)?.downgraded) {
+                    console.log(
+                      theme.warning(
+                        `  ⚠ ${(res as any).warning || 'Cannot save permanent rule for compound command. Allowed once.'}`,
+                      ),
+                    );
+                  }
+                } catch (err: any) {
+                  console.error(theme.fail(`Failed to resolve permission: ${err.message}`));
+                }
+              };
+
               if (answer === 'y') {
-                await client.resolvePermission(session.id, event.data.requestId, 'allow_once');
+                await resolveSafe('allow_once');
               } else if (answer === 'a') {
-                await client.resolvePermission(session.id, event.data.requestId, 'allow_always');
+                await resolveSafe('allow_always');
               } else {
-                await client.resolvePermission(session.id, event.data.requestId, 'deny', 'Denied by user');
+                await resolveSafe('deny', 'Denied by user');
                 exitCode = 2;
               }
             }

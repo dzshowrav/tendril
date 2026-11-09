@@ -140,19 +140,52 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
             renderer.stopSpinner();
             rl.pause();
             const toolName = (event.data as any).name || (event.data as any).tool || 'tool';
+            const canAllowAlways = (event.data as any).options?.canAllowAlways !== false;
+            const disallowReason = (event.data as any).options?.disallowAlwaysReason;
+
             process.stdout.write(
-              renderer.renderPermissionPrompt(toolName, event.data.summary || ''),
+              renderer.renderPermissionPrompt(toolName, event.data.summary || '', {
+                canAllowAlways,
+                reason: disallowReason,
+              }),
             );
 
-            const answer = await readSingleKey(['y', 'a', 'n', 'd']);
+            const allowedKeys = canAllowAlways ? ['y', 'a', 'n', 'd'] : ['y', 'n', 'd'];
+            const answer = await readSingleKey(allowedKeys);
             process.stdout.write(`${answer}\n`);
+
+            const resolveSafe = async (
+              decision: 'allow_once' | 'allow_always' | 'deny',
+              note?: string,
+            ) => {
+              try {
+                const res = await client.resolvePermission(
+                  currentSession.id,
+                  event.data.requestId,
+                  decision,
+                  note,
+                );
+                if ((res as any)?.downgraded) {
+                  renderer.stopSpinner();
+                  console.log(
+                    theme.warning(
+                      `\n  ⚠ ${(res as any).warning || 'Cannot save permanent rule for compound command. Allowed once.'}`,
+                    ),
+                  );
+                  renderer.startSpinner('Executing tool...');
+                }
+              } catch (err: any) {
+                renderer.stopSpinner();
+                console.error(theme.fail(`Failed to resolve permission: ${err.message}`));
+              }
+            };
 
             if (answer === 'y') {
               renderer.startSpinner('Executing tool...');
-              await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_once');
+              await resolveSafe('allow_once');
             } else if (answer === 'a') {
               renderer.startSpinner('Executing tool...');
-              await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_always');
+              await resolveSafe('allow_always');
             } else if (answer === 'd') {
               try {
                 const diffs = await client.listChanges(currentSession.id);
@@ -163,26 +196,22 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
                 }
               } catch {}
               process.stdout.write(theme.warning(`Decision [y/a/n] › `));
-              const nextAns = await readSingleKey(['y', 'a', 'n']);
+              const nextKeys = canAllowAlways ? ['y', 'a', 'n'] : ['y', 'n'];
+              const nextAns = await readSingleKey(nextKeys);
               process.stdout.write(`${nextAns}\n`);
               if (nextAns === 'y') {
                 renderer.startSpinner('Executing tool...');
-                await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_once');
+                await resolveSafe('allow_once');
               } else if (nextAns === 'a') {
                 renderer.startSpinner('Executing tool...');
-                await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_always');
+                await resolveSafe('allow_always');
               } else {
-                await client.resolvePermission(currentSession.id, event.data.requestId, 'deny');
+                await resolveSafe('deny');
               }
             } else {
               // Optional note prompt for denial
               const note = await promptLine('Denial note (optional, Enter to skip): ');
-              await client.resolvePermission(
-                currentSession.id,
-                event.data.requestId,
-                'deny',
-                note.trim() || undefined,
-              );
+              await resolveSafe('deny', note.trim() || undefined);
             }
 
             rl.resume();

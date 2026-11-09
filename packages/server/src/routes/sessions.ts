@@ -382,12 +382,52 @@ export function createSessionRoutes(options: {
     const auth = c.get('auth');
     const decidedBy = auth?.type === 'cookie' ? 'web' : 'cli';
 
-    const res = await permissionEngine.registry.resolveRequest({
-      requestId,
-      decision,
-      decidedBy,
-      note,
-    });
+    let res;
+    try {
+      res = await permissionEngine.registry.resolveRequest({
+        requestId,
+        decision,
+        decidedBy,
+        note,
+      });
+    } catch (err: any) {
+      if (decision === 'allow_always' && err.message?.includes("Cannot save 'allow_always' rule")) {
+        try {
+          res = await permissionEngine.registry.resolveRequest({
+            requestId,
+            decision: 'allow_once',
+            decidedBy,
+            note: note || 'Downgraded from allow_always (compound command)',
+          });
+          return c.json({
+            ok: true,
+            decision: 'allow_once',
+            downgraded: true,
+            warning: err.message,
+          });
+        } catch (downgradeErr: any) {
+          return c.json(
+            {
+              error: {
+                code: 'permission_error',
+                message: downgradeErr.message || 'Failed to downgrade permission',
+              },
+            },
+            400,
+          );
+        }
+      }
+
+      return c.json(
+        {
+          error: {
+            code: 'cannot_resolve_permission',
+            message: err.message || 'Permission resolution failed',
+          },
+        },
+        400,
+      );
+    }
 
     if (res.status === 'already_resolved') {
       return c.json(

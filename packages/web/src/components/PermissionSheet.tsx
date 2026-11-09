@@ -106,6 +106,11 @@ export const PermissionSheet: React.FC = () => {
           >
             {summary}
           </div>
+          {pendingPermission.canAllowAlways === false && (
+            <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6, fontStyle: 'italic' }}>
+              ⚠ {pendingPermission.disallowReason || 'Cannot save permanent rule for compound command.'}
+            </div>
+          )}
         </div>
 
         {showDenyNote && (
@@ -166,19 +171,21 @@ export const PermissionSheet: React.FC = () => {
               >
                 Allow Once
               </button>
-              <button
-                onClick={() => handleDecision('allow_always')}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  backgroundColor: 'var(--secondary)',
-                  color: '#fff',
-                  fontWeight: 600,
-                }}
-              >
-                Always
-              </button>
+              {pendingPermission.canAllowAlways !== false && (
+                <button
+                  onClick={() => handleDecision('allow_always')}
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    backgroundColor: 'var(--secondary)',
+                    color: '#fff',
+                    fontWeight: 600,
+                  }}
+                >
+                  Always
+                </button>
+              )}
               <button
                 onClick={() => setShowDenyNote(true)}
                 disabled={loading}

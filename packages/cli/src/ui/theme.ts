@@ -181,7 +181,7 @@ export const theme = {
     ].join('\n');
   },
 
-  permissionCard: (opts: { tool: string; target: string; reason?: string }) => {
+  permissionCard: (opts: { tool: string; target: string; reason?: string; canAllowAlways?: boolean }) => {
     const s = getSymbols();
     const width = Math.max(48, Math.min(process.stdout.columns || 80, 66));
     const innerW = width - 4;
@@ -200,7 +200,10 @@ export const theme = {
     const line1 = `  Tool:   ${theme.secondary(opts.tool)}`;
     const line2 = `  Target: ${theme.bold(opts.target)}`;
     const line3 = opts.reason ? `  Reason: ${theme.muted(opts.reason)}` : '';
-    const actions = `  ${theme.primary('[y]')} Once  ${theme.secondary('[a]')} Always  ${theme.error('[n]')} Deny  ${theme.warning('[d]')} Diff`;
+    const canAlways = opts.canAllowAlways !== false;
+    const actions = canAlways
+      ? `  ${theme.primary('[y]')} Once  ${theme.secondary('[a]')} Always  ${theme.error('[n]')} Deny  ${theme.warning('[d]')} Diff`
+      : `  ${theme.primary('[y]')} Once  ${theme.error('[n]')} Deny  ${theme.warning('[d]')} Diff  ${theme.muted('(Always disabled for compound cmd)')}`;
 
     const border = (str: string) => theme.warning(str);
 
