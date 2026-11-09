@@ -1,0 +1,26 @@
+{
+  "name": "tendril-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "doctor": "node dist/tendril.mjs doctor"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.5.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "optionalDependencies": {
+    "@esbuild/android-arm64": "^0.28.2"
+  }
+}
