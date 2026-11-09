@@ -31,19 +31,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck & Tests
-        run: |
-          npm run typecheck
-          npm test
-
-      - name: Hardening & Performance Budgets
-        run: npm run e2e
-
       - name: Lint Shell & Web Security
         run: npm run lint:shell
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build Web UI & CLI bundle
         run: npm run build
+
+      - name: Run Tests
+        run: npm test
+
+      - name: Hardening & Performance Budgets
+        run: npm run e2e
 
       - name: Verify zero runtime dependencies in dist
         run: |
