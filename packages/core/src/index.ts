@@ -6,3 +6,4 @@ export * from './config.js';
 export * from './auth.js';
 export * from './log.js';
 export * from './store.js';
+export * from './providers/index.js';
