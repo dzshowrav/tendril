@@ -73,10 +73,67 @@ export function createServerApp(options: ServerOptions): {
   const pairingManager = new PairingManager(db);
   const permissionEngine = new PermissionEngine(db);
 
-  // Fallback dummy provider if none passed
+  // Fallback dummy / mock provider if none passed
   const activeProvider: ProviderAdapter =
     providerAdapter || {
-      stream: async function* () {
+      stream: async function* (req) {
+        if (process.env.TENDRIL_MOCK_PROVIDER === '1') {
+          const lastMsg = req.messages[req.messages.length - 1];
+          const hasToolResult = lastMsg?.content.some((b) => b.type === 'tool_result');
+
+          if (hasToolResult) {
+            yield { type: 'text_delta', text: 'Task completed successfully after tool execution.' };
+            yield { type: 'stop', reason: 'end_turn' };
+            return;
+          }
+
+          const userText =
+            lastMsg?.content
+              .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+              .map((b) => b.text)
+              .join(' ') || '';
+
+          if (userText.includes('mutate_file')) {
+            yield { type: 'text_delta', text: 'Creating file test-e2e.txt...' };
+            yield {
+              type: 'tool_use_end',
+              id: 'call_test_1',
+              name: 'write_file',
+              input: { path: 'test-e2e.txt', content: 'Initial E2E Content\n' },
+            };
+            yield { type: 'stop', reason: 'tool_use' };
+            return;
+          }
+
+          if (userText.includes('edit_file')) {
+            yield { type: 'text_delta', text: 'Editing test-e2e.txt...' };
+            yield {
+              type: 'tool_use_end',
+              id: 'call_test_2',
+              name: 'edit_file',
+              input: {
+                path: 'test-e2e.txt',
+                old_string: 'Initial E2E Content\n',
+                new_string: 'Modified E2E Content\n',
+              },
+            };
+            yield { type: 'stop', reason: 'tool_use' };
+            return;
+          }
+
+          if (userText.includes('read_file')) {
+            yield { type: 'text_delta', text: 'Reading test-e2e.txt...' };
+            yield {
+              type: 'tool_use_end',
+              id: 'call_test_3',
+              name: 'read_file',
+              input: { path: 'test-e2e.txt' },
+            };
+            yield { type: 'stop', reason: 'tool_use' };
+            return;
+          }
+        }
+
         yield { type: 'text_delta', text: 'Tendril Daemon Active.' };
         yield { type: 'stop', reason: 'end_turn' };
       },

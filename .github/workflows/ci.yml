@@ -33,6 +33,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run E2E & budget checks
+        run: npm run e2e
+
       - name: Test doctor command
         run: node dist/tendril.mjs doctor
 

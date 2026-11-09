@@ -59,6 +59,7 @@ await esbuild.build({
   entryPoints: ['packages/cli/src/index.ts'],
   outfile,
   bundle: true,
+  minify: true,
   platform: 'node',
   format: 'esm',
   target: 'node24',

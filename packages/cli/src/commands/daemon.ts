@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, openSync } from 'node:fs';
-import { getTendrilPaths } from '@tendril/core';
+import { getTendrilPaths, ensureTendrilLayout } from '@tendril/core';
 import {
   startDaemon,
   readDaemonState,
@@ -17,6 +17,7 @@ export interface ServeOptions {
 
 export async function serveCommand(options: ServeOptions = {}): Promise<void> {
   const paths = getTendrilPaths(options.home);
+  ensureTendrilLayout(paths);
 
   // If detached flag is passed
   if (options.detach) {

@@ -27,6 +27,7 @@ export function createSessionRoutes(options: {
 
   // Active turn abort controllers (sessionId -> AbortController)
   const activeControllers = new Map<string, AbortController>();
+  const readTracker = new ReadTracker();
 
   // GET /api/sessions?workspace=&cursor=
   router.get('/', (c) => {
@@ -178,8 +179,20 @@ export function createSessionRoutes(options: {
     const auth = c.get('auth');
     const origin = auth?.type === 'cookie' ? 'web' : 'cli';
 
-    const workspaceGuard = new WorkspaceGuard(session.workspace_path);
-    const readTracker = new ReadTracker();
+    let workspaceGuard: WorkspaceGuard;
+    try {
+      workspaceGuard = new WorkspaceGuard(session.workspace_path);
+    } catch (err: any) {
+      return c.json(
+        {
+          error: {
+            code: 'workspace_not_found',
+            message: err?.message || `Workspace root does not exist: ${session.workspace_path}`,
+          },
+        },
+        400,
+      );
+    }
 
     const agent = new Agent({
       db,

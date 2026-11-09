@@ -11,6 +11,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint:shell": "node scripts/lint-shell.mjs",
+    "e2e": "node scripts/budget-check.mjs && node scripts/e2e.mjs",
     "doctor": "node dist/tendril.mjs doctor"
   },
   "devDependencies": {

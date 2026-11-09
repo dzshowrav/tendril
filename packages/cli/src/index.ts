@@ -138,6 +138,7 @@ export function createCli() {
   cli
     .command('doctor', 'Check environment, Node version, and SQLite support')
     .option('--json', 'Output results as JSON')
+    .option('--home <path>', 'Custom TENDRIL_HOME directory')
     .action(async (options) => {
       const result = await runDoctor();
 
