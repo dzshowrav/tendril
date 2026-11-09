@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useRoute } from 'wouter';
+import { useRoute, useLocation } from 'wouter';
 import { useSessionStore } from '../store/session-store.js';
 import { MarkdownView } from './MarkdownView.js';
 import { PermissionSheet } from './PermissionSheet.js';
 
 export const ChatScreen: React.FC = () => {
   const [, params] = useRoute('/s/:id');
+  const [, navigate] = useLocation();
   const sessionId = params?.id;
 
   const [input, setInput] = useState('');
@@ -79,6 +80,64 @@ export const ChatScreen: React.FC = () => {
         overflow: 'hidden',
       }}
     >
+      {/* Session Tab Bar */}
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--surface)',
+          flexShrink: 0,
+        }}
+      >
+        <button
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: '2px solid var(--primary)',
+            color: 'var(--primary)',
+            fontWeight: 700,
+            fontSize: 13,
+            minHeight: 48,
+          }}
+        >
+          Chat
+        </button>
+        <button
+          onClick={() => navigate(`/s/${sessionId}/changes`)}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: '2px solid transparent',
+            color: 'var(--muted)',
+            fontWeight: 600,
+            fontSize: 13,
+            minHeight: 48,
+          }}
+        >
+          Changes
+        </button>
+        <button
+          onClick={() => navigate(`/s/${sessionId}/files`)}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: '2px solid transparent',
+            color: 'var(--muted)',
+            fontWeight: 600,
+            fontSize: 13,
+            minHeight: 48,
+          }}
+        >
+          Files
+        </button>
+      </div>
+
       {/* Messages Scroll Area */}
       <div
         ref={scrollRef}

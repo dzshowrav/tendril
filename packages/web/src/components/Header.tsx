@@ -7,6 +7,7 @@ export const Header: React.FC = () => {
   const { activeSession, isStreamConnected } = useSessionStore();
 
   const isSessionPage = location.startsWith('/s/');
+  const isSettingsPage = location === '/settings';
 
   return (
     <header
@@ -22,14 +23,18 @@ export const Header: React.FC = () => {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {isSessionPage ? (
+        {isSessionPage || isSettingsPage ? (
           <button
             onClick={() => navigate('/')}
             style={{
               padding: '6px 10px',
               backgroundColor: 'var(--surface-2)',
               border: '1px solid var(--border)',
+              borderRadius: 6,
               color: 'var(--text)',
+              fontSize: 12,
+              fontWeight: 600,
+              minHeight: 32,
             }}
           >
             ← Back

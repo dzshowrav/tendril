@@ -5,6 +5,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isDaemonOnline: boolean;
   isChecking: boolean;
+  currentClientId: string | null;
   checkHealth: () => Promise<boolean>;
   pairWithCode: (code: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -14,6 +15,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isDaemonOnline: true,
   isChecking: true,
+  currentClientId: typeof window !== 'undefined' ? localStorage.getItem('tdl_client_id') : null,
 
   checkHealth: async () => {
     try {
@@ -32,8 +34,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   pairWithCode: async (code: string) => {
     try {
-      await ApiClient.pair(code);
-      set({ isAuthenticated: true });
+      const res = await ApiClient.pair(code);
+      const clientId = res.client?.id || null;
+      if (clientId && typeof window !== 'undefined') {
+        localStorage.setItem('tdl_client_id', clientId);
+      }
+      set({ isAuthenticated: true, currentClientId: clientId });
       return true;
     } catch {
       return false;
@@ -46,6 +52,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // ignore
     }
-    set({ isAuthenticated: false });
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tdl_client_id');
+    }
+    set({ isAuthenticated: false, currentClientId: null });
   },
 }));
