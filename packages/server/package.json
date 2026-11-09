@@ -5,6 +5,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "@tendril/core": "*"
+    "@hono/node-server": "^2.1.6",
+    "@tendril/core": "*",
+    "hono": "^4.13.17"
   }
 }
