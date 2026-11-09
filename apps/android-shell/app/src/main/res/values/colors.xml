@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_canvas">#111215</color>
+    <color name="bg_surface">#17191e</color>
+    <color name="accent_primary">#38bdf8</color>
+    <color name="text_primary">#f1f5f9</color>
+    <color name="text_muted">#94a3b8</color>
+    <color name="border_subtle">#282b33</color>
+    <color name="status_pass">#22c55e</color>
+    <color name="status_warn">#eab308</color>
+    <color name="status_fail">#ef4444</color>
+    <color name="black">#000000</color>
+    <color name="white">#ffffff</color>
+</resources>

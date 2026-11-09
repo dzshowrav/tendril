@@ -10,6 +10,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "lint:shell": "node scripts/lint-shell.mjs",
     "doctor": "node dist/tendril.mjs doctor"
   },
   "devDependencies": {

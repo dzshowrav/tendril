@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Tendril sprout / vine emblem -->
+    <path
+        android:fillColor="#38bdf8"
+        android:pathData="M54,28 C50,38 42,46 36,54 C30,62 30,72 38,78 C46,84 56,82 64,74 C72,66 74,54 68,46 C64,40 58,34 54,28 Z" />
+    <path
+        android:strokeColor="#111215"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M44,56 L52,64 L64,48" />
+</vector>

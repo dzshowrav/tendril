@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    name: Monorepo Test & Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,13 +21,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Lint Android Shell
+        run: npm run lint:shell
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Run tests
         run: npm test
 
-      - name: Build CLI bundle
+      - name: Build web UI & CLI bundle
         run: npm run build
 
       - name: Test doctor command
@@ -34,3 +38,34 @@ jobs:
 
       - name: Test version command
         run: node dist/tendril.mjs --version
+
+  android:
+    name: Android Shell APK Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run Android Shell Lint
+        run: node scripts/lint-shell.mjs
+
+      - name: Build Debug APK with Gradle
+        run: |
+          cd apps/android-shell
+          chmod +x gradlew
+          ./gradlew lint assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tendril-shell-debug
+          path: apps/android-shell/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn

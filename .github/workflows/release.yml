@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release-npm:
+    name: Build & Publish npm Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck & Tests
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build Web UI & CLI bundle
+        run: npm run build
+
+      - name: Smoke test CLI
+        run: |
+          node dist/tendril.mjs doctor
+          node dist/tendril.mjs --version
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "npm publish placeholder (Step 15)"
+          # npm publish --provenance --access public
+
+  release-apk:
+    name: Build & Sign Android Companion APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Release APK
+        run: |
+          cd apps/android-shell
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Sign Release APK Skeleton
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "Signing release APK skeleton (Step 15)"
+
+      - name: Generate Checksums & Create GitHub Release
+        run: |
+          echo "SHA256SUMS generation and GitHub release creation (Step 15)"

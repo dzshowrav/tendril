@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Tendril" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent_primary</item>
+        <item name="colorPrimaryVariant">@color/accent_primary</item>
+        <item name="colorOnPrimary">@color/bg_canvas</item>
+        <item name="android:windowBackground">@color/bg_canvas</item>
+        <item name="android:statusBarColor">@color/bg_canvas</item>
+        <item name="android:navigationBarColor">@color/bg_canvas</item>
+    </style>
+</resources>

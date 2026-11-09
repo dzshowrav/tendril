@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tendril</string>
+    <string name="status_checking">Checking daemon…</string>
+    <string name="status_starting">Starting daemon…</string>
+    <string name="status_pairing">Pairing with daemon…</string>
+    <string name="status_offline">Daemon offline</string>
+
+    <string name="btn_retry">Retry</string>
+    <string name="btn_open_termux">Open Termux</string>
+    <string name="btn_copy_command">Copy Command</string>
+    <string name="btn_install_guide">Install Guide</string>
+    <string name="btn_grant_permission">Grant Permission</string>
+    <string name="toast_copied">Command copied to clipboard</string>
+
+    <string name="help_title">Setup Required</string>
+    <string name="help_termux_not_installed_title">Termux is not installed</string>
+    <string name="help_termux_not_installed_desc">Tendril requires Termux to run the local agent daemon. Please install Termux from F-Droid or GitHub releases (Google Play Store builds are deprecated).</string>
+    <string name="help_permission_missing_title">Termux Permission Missing</string>
+    <string name="help_permission_missing_desc">Tendril Shell requires the com.termux.permission.RUN_COMMAND permission to manage the background daemon.</string>
+    <string name="help_external_apps_title">Allow External Apps</string>
+    <string name="help_external_apps_desc">Termux must be configured to permit external apps to execute commands. Add allow-external-apps = true to ~/.termux/termux.properties.</string>
+    <string name="help_daemon_failed_title">Daemon Unreachable</string>
+    <string name="help_daemon_failed_desc">The daemon did not respond within 20 seconds. Ensure Tendril is installed in Termux and nodejs-lts is available.</string>
+
+    <string name="menu_reload">Reload</string>
+    <string name="menu_settings">Shell Settings</string>
+
+    <string name="settings_title">Shell Settings</string>
+    <string name="settings_port_label">Daemon Port</string>
+    <string name="settings_port_hint">7421</string>
+    <string name="settings_autostart_label">Start daemon on launch</string>
+    <string name="settings_save">Save</string>
+</resources>
