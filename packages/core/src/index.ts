@@ -7,3 +7,6 @@ export * from './auth.js';
 export * from './log.js';
 export * from './store.js';
 export * from './providers/index.js';
+export * from './workspace.js';
+export * from './read-tracker.js';
+export * from './tools/index.js';
