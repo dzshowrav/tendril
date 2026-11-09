@@ -1,6 +1,7 @@
 import http from 'node:http';
 import net from 'node:net';
 import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, renameSync } from 'node:fs';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { serve } from '@hono/node-server';
@@ -277,6 +278,23 @@ export function deleteDaemonState(paths: TendrilPaths): void {
 /**
  * Starts the Tendril daemon server.
  */
+/**
+ * Resolves default static web directory if not explicitly provided.
+ */
+export function resolveDefaultStaticDir(): string | undefined {
+  const candidates = [
+    join(process.cwd(), 'dist/assets/web'),
+    join(process.cwd(), 'packages/cli/assets/web'),
+    join(process.cwd(), 'packages/web/dist'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(join(c, 'index.html'))) {
+      return c;
+    }
+  }
+  return undefined;
+}
+
 export async function startDaemon(options: StartDaemonOptions = {}): Promise<DaemonInstance> {
   const paths = getTendrilPaths(options.customHome);
   ensureTendrilLayout(paths);
@@ -322,7 +340,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Dae
     port: targetPort,
     configPath: options.configPath || paths.configPath,
     authPath: options.authPath || paths.authPath,
-    staticDir: options.staticDir,
+    staticDir: options.staticDir || resolveDefaultStaticDir(),
     providerAdapter: options.providerAdapter,
     toolRegistry: options.toolRegistry,
   });

@@ -1,11 +1,60 @@
 import * as esbuild from 'esbuild';
-import { chmodSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { chmodSync, mkdirSync, cpSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { execSync } from 'node:child_process';
 
+console.log('Building @tendril/web with Vite...');
+execSync('npm run build --workspace=@tendril/web', { stdio: 'inherit' });
+
+const webDist = 'packages/web/dist';
+const cliWebAssets = 'packages/cli/assets/web';
+const distWebAssets = 'dist/assets/web';
+
+if (!existsSync(webDist)) {
+  throw new Error(`Web build output not found at ${webDist}`);
+}
+
+// Ensure target directories exist and are clean
+rmSync(cliWebAssets, { recursive: true, force: true });
+rmSync(distWebAssets, { recursive: true, force: true });
+mkdirSync(cliWebAssets, { recursive: true });
+mkdirSync(distWebAssets, { recursive: true });
+
+// Copy web build output to packages/cli/assets/web and dist/assets/web
+cpSync(webDist, cliWebAssets, { recursive: true });
+cpSync(webDist, distWebAssets, { recursive: true });
+console.log(`Copied web build assets to ${cliWebAssets} and ${distWebAssets}`);
+
+// Assert initial JS bundle is under 400 KB gzipped
+const assetsDir = join(distWebAssets, 'assets');
+const assetFiles = readdirSync(assetsDir);
+const jsFiles = assetFiles.filter((f) => f.endsWith('.js'));
+
+if (jsFiles.length === 0) {
+  throw new Error(`No JS assets found in ${assetsDir}`);
+}
+
+for (const jsFile of jsFiles) {
+  const filePath = join(assetsDir, jsFile);
+  const content = readFileSync(filePath);
+  const gzipped = gzipSync(content);
+  const sizeKb = (gzipped.byteLength / 1024).toFixed(2);
+  console.log(`Web JS asset: ${jsFile} - ${sizeKb} KB gzipped (raw: ${(content.byteLength / 1024).toFixed(2)} KB)`);
+
+  const MAX_GZIP_BYTES = 400 * 1024;
+  if (gzipped.byteLength > MAX_GZIP_BYTES) {
+    throw new Error(
+      `Initial JS asset ${jsFile} (${sizeKb} KB gzipped) exceeds the 400 KB budget limit!`,
+    );
+  }
+}
+
+// Build CLI bundle with esbuild
 const outfile = 'dist/tendril.mjs';
-
 mkdirSync(dirname(outfile), { recursive: true });
 
+console.log(`Building CLI bundle ${outfile}...`);
 await esbuild.build({
   entryPoints: ['packages/cli/src/index.ts'],
   outfile,
