@@ -27,11 +27,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Run tests
-        run: npm test
-
       - name: Build web UI & CLI bundle
         run: npm run build
+
+      - name: Run tests
+        run: npm test
 
       - name: Test doctor command
         run: node dist/tendril.mjs doctor
