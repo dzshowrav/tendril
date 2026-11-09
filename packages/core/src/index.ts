@@ -10,3 +10,4 @@ export * from './providers/index.js';
 export * from './workspace.js';
 export * from './read-tracker.js';
 export * from './tools/index.js';
+export * from './permissions/index.js';
