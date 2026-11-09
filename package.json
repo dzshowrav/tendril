@@ -14,8 +14,6 @@
     "doctor": "node dist/tendril.mjs doctor"
   },
   "devDependencies": {
-    "@esbuild/android-arm64": "^0.28.2",
-    "@rollup/rollup-android-arm64": "^4.68.1",
     "@types/diff": "^7.0.2",
     "@types/node": "^22.13.0",
     "esbuild": "^0.28.2",
@@ -25,6 +23,7 @@
     "vitest": "^3.0.5"
   },
   "optionalDependencies": {
-    "@esbuild/android-arm64": "^0.28.2"
+    "@esbuild/android-arm64": "^0.28.2",
+    "@rollup/rollup-android-arm64": "^4.68.1"
   }
 }
