@@ -1,11 +1,25 @@
 import readline from 'node:readline';
 import { basename, resolve } from 'node:path';
-import { SessionMode, SessionRow, loadAuth, getTendrilPaths } from '@tendril/core';
+import { execSync } from 'node:child_process';
+import { SessionMode, SessionRow, loadAuth, getTendrilPaths, VERSION as TENDRIL_VERSION } from '@tendril/core';
 import { TendrilClient } from './client.js';
 import { EventRenderer } from './render.js';
 import { theme, getSymbols } from './ui/theme.js';
 import { loginCommand } from './commands/login.js';
 import { uiCommand } from './commands/pair-ui.js';
+
+function getGitBranch(cwd: string): string | undefined {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return undefined;
+  }
+}
 
 export interface ReplOptions {
   sessionId?: string;
@@ -47,11 +61,27 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
     currentSession = res.session;
   }
 
-  // 4. Print Initial Header
+  // 4. Print Initial Header Banner (Antigravity-style)
   const printHeader = () => {
-    const wsTail = basename(currentSession.workspace_path);
-    console.log(theme.header(wsTail, currentSession.mode, currentSession.model));
-    console.log();
+    const wsDisplay = currentSession.workspace_path.replace(process.env.HOME || '', '~');
+    const branch = getGitBranch(currentSession.workspace_path);
+    let port = 7421;
+    try {
+      if (client.baseUrl) {
+        port = parseInt(new URL(client.baseUrl).port, 10) || 7421;
+      }
+    } catch {}
+
+    console.log(
+      theme.banner({
+        version: TENDRIL_VERSION,
+        workspace: wsDisplay,
+        gitBranch: branch,
+        model: currentSession.model,
+        mode: currentSession.mode,
+        port,
+      }),
+    );
   };
 
   printHeader();
@@ -101,18 +131,42 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
             break;
 
           case 'tool.permission': {
+            renderer.stopSpinner();
             rl.pause();
             process.stdout.write(
               renderer.renderPermissionPrompt(event.data.tool, event.data.summary || ''),
             );
 
-            const answer = await readSingleKey(['y', 'a', 'n']);
+            const answer = await readSingleKey(['y', 'a', 'n', 'd']);
             process.stdout.write(`${answer}\n`);
 
             if (answer === 'y') {
+              renderer.startSpinner('Executing tool...');
               await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_once');
             } else if (answer === 'a') {
+              renderer.startSpinner('Executing tool...');
               await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_always');
+            } else if (answer === 'd') {
+              try {
+                const diffs = await client.listChanges(currentSession.id);
+                if (diffs.changes.length > 0) {
+                  renderer.renderDiff(diffs.changes[0].diff_unified);
+                } else {
+                  console.log(theme.muted('No diff available yet.'));
+                }
+              } catch {}
+              process.stdout.write(theme.warning(`Decision [y/a/n] › `));
+              const nextAns = await readSingleKey(['y', 'a', 'n']);
+              process.stdout.write(`${nextAns}\n`);
+              if (nextAns === 'y') {
+                renderer.startSpinner('Executing tool...');
+                await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_once');
+              } else if (nextAns === 'a') {
+                renderer.startSpinner('Executing tool...');
+                await client.resolvePermission(currentSession.id, event.data.requestId, 'allow_always');
+              } else {
+                await client.resolvePermission(currentSession.id, event.data.requestId, 'deny');
+              }
             } else {
               // Optional note prompt for denial
               const note = await promptLine('Denial note (optional, Enter to skip): ');
@@ -130,12 +184,14 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
 
           case 'session.status':
             if (event.data.status === 'idle') {
+              renderer.stopSpinner();
               isTurnRunning = false;
               rl.prompt();
             }
             break;
 
           case 'error':
+            renderer.stopSpinner();
             console.error(`\n${theme.fail(event.data.message || 'Error occurred')}`);
             isTurnRunning = false;
             rl.prompt();
@@ -190,20 +246,7 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
 
       switch (cmd) {
         case '/help':
-          console.log(theme.bold('\nAvailable Slash Commands:'));
-          console.log(`  /help                 ${theme.muted('Show this help text')}`);
-          console.log(`  /model <name>         ${theme.muted('Change model for this session')}`);
-          console.log(`  /mode <plan|ask|auto-edit|yolo> ${theme.muted('Change execution mode')}`);
-          console.log(`  /new                  ${theme.muted('Start a fresh session in the same folder')}`);
-          console.log(`  /sessions             ${theme.muted('List all sessions')}`);
-          console.log(`  /resume <id>          ${theme.muted('Switch to an existing session')}`);
-          console.log(`  /undo [--force]       ${theme.muted('Undo the last file modification')}`);
-          console.log(`  /diff                 ${theme.muted('Re-print the latest change diff')}`);
-          console.log(`  /compact              ${theme.muted('Summarize and compact session history')}`);
-          console.log(`  /ui                   ${theme.muted('Open Web UI in browser')}`);
-          console.log(`  /rules                ${theme.muted('View and manage saved permissions')}`);
-          console.log(`  /clear                ${theme.muted('Clear the screen and re-print header')}`);
-          console.log(`  /exit                 ${theme.muted('Exit REPL (session is saved)\n')}`);
+          console.log(theme.helpMenu());
           rl.prompt();
           return;
 
@@ -377,9 +420,11 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
 
     // 8. Send User Prompt Turn
     isTurnRunning = true;
+    renderer.startTurn();
     try {
       await client.sendMessage(currentSession.id, fullMessage);
     } catch (err: any) {
+      renderer.stopSpinner();
       console.error(theme.fail(`Failed to send message: ${err.message}`));
       isTurnRunning = false;
       rl.prompt();
@@ -388,6 +433,7 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
 
   // 9. Handle SIGINT (Ctrl-C)
   rl.on('SIGINT', async () => {
+    renderer.stopSpinner();
     if (isTurnRunning) {
       console.log(theme.warn('\nAborting current turn...'));
       try {

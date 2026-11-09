@@ -167,9 +167,13 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
     );
 
     // 5. Send Prompt Turn
+    if (!isJson && process.stdout.isTTY) {
+      renderer.startTurn();
+    }
     try {
       await client.sendMessage(session.id, prompt);
     } catch (err: any) {
+      renderer.stopSpinner();
       unsubscribe();
       if (isJson) {
         console.log(JSON.stringify({ type: 'error', error: { code: 'send_error', message: err.message } }));
@@ -199,6 +203,7 @@ export async function askCommand(promptArg: string | undefined, options: AskOpti
       }
     }
 
+    renderer.stopSpinner();
     unsubscribe();
     if (!isJson) {
       console.log();
