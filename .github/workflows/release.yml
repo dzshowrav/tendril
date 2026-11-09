@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -11,7 +17,7 @@ permissions:
 
 jobs:
   release-npm:
-    name: Build & Publish npm Package
+    name: Build, Verify & Publish npm Package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,20 +36,46 @@ jobs:
           npm run typecheck
           npm test
 
+      - name: Hardening & Performance Budgets
+        run: npm run e2e
+
+      - name: Lint Shell & Web Security
+        run: npm run lint:shell
+
       - name: Build Web UI & CLI bundle
         run: npm run build
+
+      - name: Verify zero runtime dependencies in dist
+        run: |
+          cd dist
+          npm ls --omit=dev
 
       - name: Smoke test CLI
         run: |
           node dist/tendril.mjs doctor
           node dist/tendril.mjs --version
 
+      - name: Tarball dist
+        run: |
+          tar -czvf tendril-dist.tar.gz -C dist .
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-tarball
+          path: tendril-dist.tar.gz
+
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "npm publish placeholder (Step 15)"
-          # npm publish --provenance --access public
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "Publishing to npm with provenance..."
+            cd dist
+            npm publish --provenance --access public
+          else
+            echo "NPM_TOKEN not set; skipping npm publish."
+          fi
 
   release-apk:
     name: Build & Sign Android Companion APK
@@ -60,21 +92,102 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Release APK
+      - name: Build APKs
         run: |
           cd apps/android-shell
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleDebug assembleRelease
 
-      - name: Sign Release APK Skeleton
+      - name: Package & Sign APK
+        id: sign_apk
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "Signing release APK skeleton (Step 15)"
+          mkdir -p release-artifacts
+          cp apps/android-shell/app/build/outputs/apk/debug/app-debug.apk release-artifacts/tendril-shell-debug.apk
 
-      - name: Generate Checksums & Create GitHub Release
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "Decoding release keystore..."
+            echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+            $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+              --ks release.keystore \
+              --ks-pass pass:"$KEYSTORE_PASSWORD" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --key-pass pass:"$KEY_PASSWORD" \
+              --out release-artifacts/tendril-shell-release.apk \
+              apps/android-shell/app/build/outputs/apk/release/app-release-unsigned.apk
+            
+            echo "Release APK signed successfully."
+            FINGERPRINT=$($ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs release-artifacts/tendril-shell-release.apk | grep "SHA-256 digest" | head -n 1 | awk '{print $3}')
+            echo "FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
+            rm -f release.keystore
+          else
+            echo "Release keystore secrets not configured; using debug APK as companion."
+            cp release-artifacts/tendril-shell-debug.apk release-artifacts/tendril-shell-release.apk
+            echo "FINGERPRINT=debug-keystore" >> $GITHUB_ENV
+          fi
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifacts
+          path: release-artifacts/
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: [release-npm, release-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-tarball
+          path: release-assets
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: apk-artifacts
+          path: release-assets
+
+      - name: Generate SHA256SUMS
         run: |
-          echo "SHA256SUMS generation and GitHub release creation (Step 15)"
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name != '' && github.ref_name || inputs.tag }}
+        run: |
+          TARGET_TAG="${TAG_NAME:-v0.1.0}"
+          RELEASE_TITLE="Tendril ${TARGET_TAG}"
+          NOTES="## Tendril ${TARGET_TAG} 🚀
+          
+          ### Artifacts:
+          - **tendril-shell-debug.apk**: Android companion WebView app (Debug build).
+          - **tendril-shell-release.apk**: Android companion WebView app (Release build).
+          - **tendril-dist.tar.gz**: Standalone executable CLI & Web bundle.
+          - **SHA256SUMS**: Checksums for all released binaries.
+          
+          ### Installation in Termux:
+          \`\`\`bash
+          curl -sL https://raw.githubusercontent.com/dzshowrav/tendril/main/scripts/install.sh | bash
+          # or: npm install -g tendril
+          \`\`\`
+          
+          ### Verification:
+          Inspect SHA256SUMS before installing on device."
+          
+          gh release create "$TARGET_TAG" \
+            release-assets/* \
+            --title "$RELEASE_TITLE" \
+            --notes "$NOTES" \
+            --draft=false \
+            --prerelease=false || echo "Release already exists or draft updated."

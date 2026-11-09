@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { chmodSync, mkdirSync, cpSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, cpSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { execSync } from 'node:child_process';
@@ -75,3 +75,44 @@ await esbuild.build({
 
 chmodSync(outfile, 0o755);
 console.log(`Successfully built ${outfile}`);
+
+// Write dist/package.json for zero-runtime-dependency npm distribution
+const distPkg = {
+  name: 'tendril',
+  version: '0.1.0',
+  description: 'The open-source AI coding harness for Termux on Android',
+  license: 'MIT',
+  author: 'Tendril Contributors',
+  repository: {
+    type: 'git',
+    url: 'https://github.com/dzshowrav/tendril.git',
+  },
+  type: 'module',
+  bin: {
+    tendril: './tendril.mjs',
+  },
+  files: [
+    'tendril.mjs',
+    'tendril.mjs.map',
+    'assets',
+    'README.md',
+    'LICENSE',
+  ],
+  engines: {
+    node: '>=24.15.0',
+  },
+  dependencies: {},
+};
+
+writeFileSync('dist/package.json', JSON.stringify(distPkg, null, 2) + '\n');
+console.log('Wrote dist/package.json');
+
+// Copy README.md and LICENSE into dist/
+if (existsSync('README.md')) {
+  cpSync('README.md', 'dist/README.md');
+}
+if (existsSync('LICENSE')) {
+  cpSync('LICENSE', 'dist/LICENSE');
+}
+console.log('Copied README.md and LICENSE to dist/');
+

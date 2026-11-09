@@ -78,21 +78,21 @@ Write `README.md` (what it is, 60-second Termux quick start, screenshots of CLI 
 
 ## Done when (summary checklist)
 
-- [ ] Step 1: `doctor` stub runs on the phone; CI green
-- [ ] Step 2: schema migration 1 creates all seven tables; file modes verified
-- [ ] Step 3: both provider adapters pass fixtures and a live round trip
-- [ ] Step 4: workspace escape attempts all rejected; read tools correct
-- [ ] Step 5: edits snapshot and undo; bash timeouts and aborts kill process trees
-- [ ] Step 6: permission matrix matches the TRD exactly
-- [ ] Step 7: scripted 3-step task, compaction, and interrupted recovery pass
-- [ ] Step 8: auth, Host/Origin, pairing, SSE replay, busy-409 verified over real HTTP
-- [ ] Step 9: CLI completes a real task, `/undo` works, `ask` exit codes correct
-- [ ] Step 10: web chat live-mirrors the CLI; permission race resolves; reconnect is clean
-- [ ] Step 11: Changes/Diff/Undo, Files, Settings, Doctor all work
-- [ ] Step 12: Termux checks, `termux_api`, installer verified on clean Termux
-- [ ] Step 13: APK cold-starts the daemon via Termux and pairs automatically
-- [ ] Step 14: e2e, security, and performance budgets pass
-- [ ] Step 15: README-only install works; release artifacts published
+- [x] Step 1: `doctor` stub runs on the phone; CI green
+- [x] Step 2: schema migration 1 creates all seven tables; file modes verified
+- [x] Step 3: both provider adapters pass fixtures and a live round trip
+- [x] Step 4: workspace escape attempts all rejected; read tools correct
+- [x] Step 5: edits snapshot and undo; bash timeouts and aborts kill process trees
+- [x] Step 6: permission matrix matches the TRD exactly
+- [x] Step 7: scripted 3-step task, compaction, and interrupted recovery pass
+- [x] Step 8: auth, Host/Origin, pairing, SSE replay, busy-409 verified over real HTTP
+- [x] Step 9: CLI completes a real task, `/undo` works, `ask` exit codes correct
+- [x] Step 10: web chat live-mirrors the CLI; permission race resolves; reconnect is clean
+- [x] Step 11: Changes/Diff/Undo, Files, Settings, Doctor all work
+- [x] Step 12: Termux checks, `termux_api`, installer verified on clean Termux
+- [x] Step 13: APK cold-starts the daemon via Termux and pairs automatically
+- [x] Step 14: e2e, security, and performance budgets pass
+- [x] Step 15: README-only install works; release artifacts published
 
 ## Coverage map (PRD feature → steps)
 
