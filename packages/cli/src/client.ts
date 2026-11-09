@@ -174,7 +174,7 @@ export class TendrilClient {
     return data as T;
   }
 
-  public async getHealth(): Promise<{ status: string; version: string; port: number }> {
+  public async getHealth(): Promise<{ ok?: boolean; status: string; version: string; port?: number }> {
     return this.request('/api/health');
   }
 

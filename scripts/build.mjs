@@ -76,6 +76,15 @@ await esbuild.build({
 chmodSync(outfile, 0o755);
 console.log(`Successfully built ${outfile}`);
 
+if (existsSync('/data/data/com.termux/files/usr/bin/termux-fix-shebang')) {
+  try {
+    execSync(`termux-fix-shebang ${outfile}`);
+    console.log(`Applied termux-fix-shebang to ${outfile}`);
+  } catch {
+    // Ignore in non-termux environments
+  }
+}
+
 // Write dist/package.json for zero-runtime-dependency npm distribution
 const distPkg = {
   name: 'tendril',

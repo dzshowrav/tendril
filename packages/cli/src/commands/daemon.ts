@@ -126,7 +126,7 @@ export async function statusCommand(options: { home?: string } = {}): Promise<vo
   let healthOk = false;
   try {
     const health = await client.getHealth();
-    healthOk = health.status === 'ok';
+    healthOk = Boolean(health.ok || health.status === 'ok');
   } catch {
     healthOk = false;
   }

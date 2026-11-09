@@ -1,6 +1,7 @@
 import { cac } from 'cac';
 import pc from 'picocolors';
 import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { VERSION, APP_NAME, runDoctor } from '@tendril/core';
 import { askCommand } from './commands/ask.js';
@@ -196,7 +197,21 @@ export async function runCli(argv = process.argv): Promise<void> {
 // When executed directly as script
 if (process.argv[1]) {
   try {
-    const isMain = resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+    const currentUrl = fileURLToPath(import.meta.url);
+    const resolvedArgv = resolve(process.argv[1]);
+    let realArgv = resolvedArgv;
+    try {
+      realArgv = realpathSync(process.argv[1]);
+    } catch {
+      // Ignore realpath error
+    }
+
+    const isMain =
+      realArgv === currentUrl ||
+      resolvedArgv === currentUrl ||
+      process.argv[1].endsWith('tendril.mjs') ||
+      process.argv[1].endsWith('/tendril');
+
     if (isMain) {
       runCli();
     }

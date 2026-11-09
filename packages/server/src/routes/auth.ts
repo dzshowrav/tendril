@@ -17,6 +17,7 @@ export function createAuthRoutes(options: {
     const auth = c.get('auth');
     return c.json({
       ok: true,
+      status: 'ok',
       version: VERSION,
       authed: Boolean(auth),
     });
