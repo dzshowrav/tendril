@@ -11,6 +11,9 @@ import { PasteChipManager } from './components/input/chips.js';
 import { executeShellEscape } from './components/input/shell-escape.js';
 import { loginCommand } from './commands/login.js';
 import { uiCommand } from './commands/pair-ui.js';
+import { createDefaultCommandRegistry } from './commands/defaults.js';
+import { CommandContext } from './commands/registry.js';
+import { resolveActiveTheme } from './theme/loader.js';
 
 function getGitBranch(cwd: string): string | undefined {
   try {
@@ -99,6 +102,8 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
   let multilineBuffer = '';
 
   const s = getSymbols();
+  const activeTheme = resolveActiveTheme();
+  const commandRegistry = createDefaultCommandRegistry();
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -312,182 +317,30 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
 
     // 7. Slash Commands
     if (fullMessage.startsWith('/')) {
-      const parts = fullMessage.trim().split(/\s+/);
-      const cmd = parts[0].toLowerCase();
-      const arg = parts.slice(1).join(' ');
-
-      switch (cmd) {
-        case '/help':
-          console.log(theme.helpMenu());
-          rl.prompt();
-          return;
-
-        case '/model': {
-          if (!arg) {
-            console.log(theme.muted(`Current model: ${currentSession.model}`));
-          } else {
-            const updated = await client.updateSession(currentSession.id, { model: arg });
-            currentSession = updated.session;
-            console.log(theme.success(`Model updated to ${arg}`));
-            printHeader();
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/mode': {
-          const modeVal = arg.toLowerCase() as SessionMode;
-          if (!['plan', 'ask', 'auto-edit', 'yolo'].includes(modeVal)) {
-            console.log(theme.warn("Valid modes: 'plan', 'ask', 'auto-edit', 'yolo'"));
-            rl.prompt();
-            return;
-          }
-
-          if (modeVal === 'yolo') {
-            const confirm = await promptLine("Type 'yolo' to confirm unrestricted auto-execution mode: ");
-            if (confirm.trim() !== 'yolo') {
-              console.log(theme.muted('Mode change cancelled.'));
-              rl.prompt();
-              return;
-            }
-          }
-
-          const updated = await client.updateSession(currentSession.id, { mode: modeVal });
-          currentSession = updated.session;
-          console.log(theme.success(`Mode changed to ${theme.mode(modeVal)}`));
-          printHeader();
-          rl.prompt();
-          return;
-        }
-
-        case '/new': {
-          const res = await client.createSession({
-            workspace: currentSession.workspace_path,
-            mode: currentSession.mode,
-            model: currentSession.model,
-            title: `CLI Session: ${basename(currentSession.workspace_path)}`,
-          });
-          currentSession = res.session;
+      promptHistory.add(fullMessage);
+      const commandContext: CommandContext = {
+        client,
+        currentSession,
+        setSession: (sess) => {
+          currentSession = sess;
+        },
+        theme: activeTheme,
+        reconnectStream: () => {
           connectStream();
-          console.log(theme.success(`Started new session ${currentSession.id}`));
-          printHeader();
-          rl.prompt();
-          return;
-        }
-
-        case '/sessions': {
-          const { sessions } = await client.listSessions();
-          for (const sess of sessions.slice(0, 10)) {
-            const marker = sess.id === currentSession.id ? theme.primary('*') : ' ';
-            console.log(`${marker} ${sess.id.slice(0, 16)}  ${theme.mode(sess.mode).padEnd(12)}  ${sess.title}`);
-          }
-          console.log();
-          rl.prompt();
-          return;
-        }
-
-        case '/resume': {
-          if (!arg) {
-            console.log(theme.warn('Usage: /resume <session-id>'));
-            rl.prompt();
-            return;
-          }
-          try {
-            const res = await client.getSession(arg.trim());
-            currentSession = res.session;
-            connectStream();
-            console.log(theme.success(`Switched to session ${currentSession.id}`));
-            printHeader();
-          } catch (err: any) {
-            console.error(theme.fail(`Could not switch session: ${err.message}`));
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/undo': {
-          const force = arg.includes('--force');
-          const { changes } = await client.listChanges(currentSession.id);
-          if (changes.length === 0) {
-            console.log(theme.muted('No changes recorded in this session to undo.'));
-          } else {
-            const latest = changes[0];
-            try {
-              const res = await client.undoChange(currentSession.id, latest.tool_run_id, force);
-              console.log(theme.success(`Restored file '${res.restoredPath}'.`));
-            } catch (err: any) {
-              console.error(theme.fail(`Undo failed: ${err.message}`));
-            }
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/diff': {
-          const { changes } = await client.listChanges(currentSession.id);
-          if (changes.length === 0) {
-            console.log(theme.muted('No diffs available for this session.'));
-          } else {
-            console.log(theme.bold(`\nLatest change (${changes[0].path}):`));
-            renderer.renderDiff(changes[0].diff_unified);
-            console.log();
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/compact': {
-          console.log(theme.muted('Compacting session context...'));
-          try {
-            const res = await client.compactSession(currentSession.id);
-            console.log(theme.success(`Compacted: ${res.droppedMessages || 0} messages summarized.`));
-          } catch (err: any) {
-            console.error(theme.fail(`Compaction failed: ${err.message}`));
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/ui': {
-          await uiCommand({ home: options.home });
-          rl.prompt();
-          return;
-        }
-
-        case '/rules': {
-          const { rules } = await client.listRules();
-          if (rules.length === 0) {
-            console.log(theme.muted('No saved "allow_always" permission rules.'));
-          } else {
-            console.log(theme.bold('\nSaved Rules:'));
-            for (let i = 0; i < rules.length; i++) {
-              console.log(`[${i + 1}] ${rules[i].tool}: ${rules[i].pattern}`);
-            }
-            console.log();
-          }
-          rl.prompt();
-          return;
-        }
-
-        case '/clear': {
-          console.clear();
-          printHeader();
-          rl.prompt();
-          return;
-        }
-
-        case '/exit': {
+        },
+        promptLine,
+        printHeader,
+        exit: () => {
           if (activeUnsubscribe) activeUnsubscribe();
           rl.close();
           process.exit(0);
-          return;
-        }
+        },
+        output: (text) => process.stdout.write(text),
+      };
 
-        default:
-          console.log(theme.warn(`Unknown slash command '${cmd}'. Type /help for available commands.`));
-          rl.prompt();
-          return;
-      }
+      await commandRegistry.execute(fullMessage, commandContext);
+      rl.prompt();
+      return;
     }
 
     // 8. Non-blocking Input Queuing or Immediate Send
