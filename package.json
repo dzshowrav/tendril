@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:tui": "cd packages/cli-go && go build -o tendril-tui main.go",
+    "tui": "tendril-tui",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint:shell": "node scripts/lint-shell.mjs",

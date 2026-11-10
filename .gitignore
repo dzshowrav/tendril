@@ -6,3 +6,5 @@ packages/cli/assets/
 coverage/
 .DS_Store
 *.tsbuildinfo
+tendril-tui
+packages/cli-go/tendril-tui
