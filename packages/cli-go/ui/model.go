@@ -49,6 +49,7 @@ type Model struct {
 	elapsedSecs   int
 
 	// Autocomplete
+	autocomplete  AutocompletePopup
 	popupOpen     bool
 	popupItems    []string
 	popupIndex    int
@@ -266,15 +267,138 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 
+		case tea.KeyEsc:
+			if m.autocomplete.Active {
+				m.autocomplete.Active = false
+				return m, nil
+			}
+			if m.isBusy {
+				_ = m.client.AbortSession(m.session.ID)
+				m.isBusy = false
+				m.historyLines = append(m.historyLines, StyleWarning.Render(fmt.Sprintf("  %s %s Interrupted by user", GlyphConnector, GlyphWaiting)), "")
+				m.commitCurrentTurn()
+				m.syncViewport()
+				return m, nil
+			}
+
+		case tea.KeyUp:
+			if m.autocomplete.Active {
+				m.autocomplete.SelectPrev()
+				return m, nil
+			}
+
+		case tea.KeyDown:
+			if m.autocomplete.Active {
+				m.autocomplete.SelectNext()
+				return m, nil
+			}
+
+		case tea.KeyTab:
+			if m.autocomplete.Active {
+				cmd := m.autocomplete.SelectedCommand()
+				if cmd != "" {
+					m.textarea.SetValue(cmd + " ")
+					m.autocomplete.Active = false
+					return m, nil
+				}
+			}
+
 		case tea.KeyEnter:
 			input := strings.TrimSpace(m.textarea.Value())
 			if input == "" {
 				return m, nil
 			}
 
-			// Add to conversation history
+			// If autocomplete was active and user pressed Enter without spaces
+			if m.autocomplete.Active && !strings.Contains(input, " ") {
+				sel := m.autocomplete.SelectedCommand()
+				if sel != "" {
+					input = sel
+				}
+				m.autocomplete.Active = false
+			}
+
+			// Built-in slash commands
+			if strings.HasPrefix(input, "/") {
+				parts := strings.Fields(input)
+				rootCmd := strings.ToLower(parts[0])
+
+				switch rootCmd {
+				case "/clear":
+					m.historyLines = nil
+					m.currentTurn.Reset()
+					m.viewport.SetContent("")
+					m.textarea.Reset()
+					m.autocomplete.Active = false
+					return m, nil
+
+				case "/exit", "/quit":
+					return m, tea.Quit
+
+				case "/help":
+					m.textarea.Reset()
+					m.autocomplete.Active = false
+					m.historyLines = append(m.historyLines,
+						StyleCyan.Render(fmt.Sprintf("%s %s", GlyphPrompt, input)),
+						m.renderHelpOverlay(),
+						"",
+					)
+					m.syncViewport()
+					return m, nil
+
+				case "/mode":
+					m.textarea.Reset()
+					m.autocomplete.Active = false
+					if len(parts) > 1 {
+						newMode := strings.ToLower(parts[1])
+						if newMode == "ask" || newMode == "architect" || newMode == "code" {
+							m.session.Mode = newMode
+							m.historyLines = append(m.historyLines,
+								StyleCyan.Render(fmt.Sprintf("%s %s", GlyphPrompt, input)),
+								StyleSuccess.Render(fmt.Sprintf("  %s Switched mode to: %s", GlyphSuccess, newMode)),
+								"",
+							)
+						} else {
+							m.historyLines = append(m.historyLines,
+								StyleError.Render("  Usage: /mode <ask | architect | code>"),
+								"",
+							)
+						}
+					} else {
+						m.historyLines = append(m.historyLines,
+							StyleTitle.Render(fmt.Sprintf("  Current mode: %s (Available: ask, architect, code)", m.session.Mode)),
+							"",
+						)
+					}
+					m.syncViewport()
+					return m, nil
+
+				case "/model":
+					m.textarea.Reset()
+					m.autocomplete.Active = false
+					if len(parts) > 1 {
+						newModel := parts[1]
+						m.session.Model = newModel
+						m.historyLines = append(m.historyLines,
+							StyleCyan.Render(fmt.Sprintf("%s %s", GlyphPrompt, input)),
+							StyleSuccess.Render(fmt.Sprintf("  %s Switched model to: %s", GlyphSuccess, newModel)),
+							"",
+						)
+					} else {
+						m.historyLines = append(m.historyLines,
+							StyleTitle.Render(fmt.Sprintf("  Current model: %s", m.session.Model)),
+							"",
+						)
+					}
+					m.syncViewport()
+					return m, nil
+				}
+			}
+
+			// Normal prompt
 			m.historyLines = append(m.historyLines, StyleCyan.Render(fmt.Sprintf("%s %s", GlyphPrompt, input)), "")
 			m.textarea.Reset()
+			m.autocomplete.Active = false
 			m.isBusy = true
 			m.busyStartTime = time.Now()
 			m.elapsedSecs = 0
@@ -287,6 +411,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.textarea, tiCmd = m.textarea.Update(msg)
+	m.autocomplete.Update(m.textarea.Value())
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	m.spinner, spCmd = m.spinner.Update(msg)
 
@@ -297,7 +422,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) commitCurrentTurn() {
 	if m.currentTurn.Len() > 0 {
 		text := m.currentTurn.String()
-		lines := strings.Split(text, "\n")
+		rendered := RenderMarkdown(text, m.width)
+		lines := strings.Split(rendered, "\n")
 		for i, l := range lines {
 			if i == 0 {
 				m.historyLines = append(m.historyLines, StyleTitle.Render(fmt.Sprintf("%s %s", GlyphBullet, l)))
@@ -365,18 +491,35 @@ func (m Model) View() string {
 		sb.WriteString(dialogBox)
 		sb.WriteString("\n")
 	} else {
+		// Zone D: Autocomplete popup above input box
+		if m.autocomplete.Active {
+			popupBox := m.autocomplete.Render(m.width)
+			if popupBox != "" {
+				sb.WriteString(popupBox)
+				sb.WriteString("\n")
+			}
+		}
+
 		// Zone E: Input Box (Bordered, upward expanding)
-		inputBox := StyleInputBorder.Width(m.width - 4).Render(m.textarea.View())
+		boxStyle := StyleInputBorder
+		if strings.HasPrefix(strings.TrimSpace(m.textarea.Value()), "!") {
+			boxStyle = StyleShellBorder
+		}
+		inputBox := boxStyle.Width(m.width - 4).Render(m.textarea.View())
 		sb.WriteString(inputBox)
 		sb.WriteString("\n")
 	}
 
 	// Zone F: 1-Row Status Bar Footer
-	hint := "? for shortcuts"
+	hint := "? for shortcuts · / commands · ! shell"
 	if m.isBusy {
 		hint = "esc to interrupt · ctrl+o expand"
 	} else if m.state == StateApproval {
 		hint = "enter select · tab add note · esc cancel"
+	} else if m.autocomplete.Active {
+		hint = "↑/↓ navigate · tab complete · esc dismiss"
+	} else if strings.HasPrefix(strings.TrimSpace(m.textarea.Value()), "!") {
+		hint = "shell command mode · enter execute · esc clear"
 	}
 	statusRight := fmt.Sprintf("%s | %s | ctx %d%%", m.session.Mode, m.session.Model, m.contextPercent)
 	gap := m.width - lipgloss.Width(hint) - lipgloss.Width(statusRight) - 4
@@ -387,4 +530,26 @@ func (m Model) View() string {
 	sb.WriteString(footerLine)
 
 	return sb.String()
+}
+
+func (m Model) renderHelpOverlay() string {
+	helpText := fmt.Sprintf("%s\n  %s  Send prompt\n  %s  Insert newline\n  %s  Interrupt busy agent / close popup\n  %s  Exit Tendril TUI\n  %s  Tool consent (1 once, 2 always, 3 deny)\n\n%s\n  %-14s  Show this help screen\n  %-14s  Clear conversation scrollback\n  %-14s  Switch model (/model <id>)\n  %-14s  Switch mode (/mode ask|architect|code)\n  %-14s  Exit Tendril TUI",
+		StyleBold.Render("Keyboard Shortcuts:"),
+		StyleCyan.Render("Enter"),
+		StyleCyan.Render("Ctrl+J"),
+		StyleCyan.Render("Esc"),
+		StyleCyan.Render("Ctrl+C"),
+		StyleCyan.Render("y / a / n"),
+		StyleBold.Render("Slash Commands:"),
+		"/help",
+		"/clear",
+		"/model <name>",
+		"/mode <type>",
+		"/exit",
+	)
+	boxWidth := m.width - 6
+	if boxWidth < 50 {
+		boxWidth = 50
+	}
+	return StyleBannerBorder.Width(boxWidth).Render(helpText)
 }
