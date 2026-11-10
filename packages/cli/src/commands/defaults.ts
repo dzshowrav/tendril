@@ -13,6 +13,7 @@ import { createContextPanelState, renderContextPanel } from '../components/panel
 import { createUsagePanelState, renderUsagePanel } from '../components/panels/usage-panel.js';
 import { createToolsPanelState, renderToolsPanel } from '../components/panels/tools-panel.js';
 import { createSettingsPanelState, renderSettingsPanel } from '../components/panels/settings-panel.js';
+import { runUIDoctor, formatDoctorReport } from './doctor.js';
 
 /**
  * Copies text using terminal OSC 52 sequence (compatible with SSH, Termux, tmux, etc.).
@@ -560,6 +561,18 @@ export function createDefaultCommandRegistry(): SlashCommandRegistry {
         ctx.output(ctx.theme.colors.textError(`Failed to fetch rules: ${err.message}\n`));
         return { success: false, message: err.message };
       }
+    },
+  });
+
+  // /doctor (§ 20)
+  registry.register({
+    name: 'doctor',
+    description: 'Diagnose terminal capabilities, rendering support, and active opt-outs',
+    category: 'utility',
+    execute: async (ctx) => {
+      const report = runUIDoctor();
+      ctx.output('\n' + formatDoctorReport(report, ctx.theme) + '\n\n');
+      return { success: true, data: report };
     },
   });
 
