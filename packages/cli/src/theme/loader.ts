@@ -6,9 +6,72 @@ import { lightSymbols, lightTheme } from './light.js';
 import { safeSymbols, safeTheme } from './safe.js';
 import { ColorFormatters, ThemeSymbols } from './tokens.js';
 
+export interface SemanticTokens {
+  text: {
+    primary: (str: string) => string;
+    muted: (str: string) => string;
+    error: (str: string) => string;
+    success: (str: string) => string;
+    warning: (str: string) => string;
+  };
+  status: {
+    info: (str: string) => string;
+    success: (str: string) => string;
+    error: (str: string) => string;
+    waiting: (str: string) => string;
+    running: (str: string) => string;
+  };
+  border: {
+    active: (str: string) => string;
+    focus: (str: string) => string;
+    muted: (str: string) => string;
+  };
+  prompt: {
+    default: (str: string) => string;
+    accent: (str: string) => string;
+  };
+  diff: {
+    addition: (str: string) => string;
+    removal: (str: string) => string;
+  };
+}
+
+export function buildSemanticTokens(c: ColorFormatters): SemanticTokens {
+  return {
+    text: {
+      primary: c.textPrimary,
+      muted: c.textMuted,
+      error: c.textError,
+      success: c.textSuccess,
+      warning: c.textWarning,
+    },
+    status: {
+      info: c.textAccent || c.textPrimary,
+      success: c.statusSuccess,
+      error: c.statusError,
+      waiting: c.statusWaiting,
+      running: c.statusRunning,
+    },
+    border: {
+      active: c.borderFocus,
+      focus: c.borderFocus,
+      muted: c.borderDefault,
+    },
+    prompt: {
+      default: c.textPrimary,
+      accent: c.promptAccent,
+    },
+    diff: {
+      addition: c.textSuccess,
+      removal: c.textError,
+    },
+  };
+}
+
 export interface ActiveTheme {
   name: ThemeName;
   colors: ColorFormatters;
+  tokens: SemanticTokens;
   symbols: ThemeSymbols;
   isNoColor: boolean;
 }
@@ -81,9 +144,12 @@ export function resolveActiveTheme(options?: {
     colors = createNoColorTheme(colors);
   }
 
+  const tokens = buildSemanticTokens(colors);
+
   return {
     name,
     colors,
+    tokens,
     symbols,
     isNoColor,
   };
