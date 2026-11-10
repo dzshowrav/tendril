@@ -5,6 +5,10 @@ import { SessionMode, SessionRow, loadAuth, getTendrilPaths, VERSION as TENDRIL_
 import { TendrilClient } from './client.js';
 import { EventRenderer } from './render.js';
 import { theme, getSymbols } from './ui/theme.js';
+import { InputQueue } from './components/input/queue.js';
+import { PromptHistory } from './components/input/history.js';
+import { PasteChipManager } from './components/input/chips.js';
+import { executeShellEscape } from './components/input/shell-escape.js';
 import { loginCommand } from './commands/login.js';
 import { uiCommand } from './commands/pair-ui.js';
 
@@ -87,6 +91,9 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
   printHeader();
 
   const renderer = new EventRenderer();
+  const inputQueue = new InputQueue();
+  const promptHistory = new PromptHistory({ mode: 'session' });
+  const pasteChipManager = new PasteChipManager();
   let isTurnRunning = false;
   let lastCtrlCTime = 0;
   let multilineBuffer = '';
@@ -222,6 +229,21 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
             if (event.data.status === 'idle') {
               renderer.stopSpinner();
               isTurnRunning = false;
+              if (!inputQueue.isEmpty()) {
+                const nextMsg = inputQueue.dequeue();
+                if (nextMsg) {
+                  console.log(theme.secondary(`\n▶ Dispatching queued message: "${nextMsg.text}"\n`));
+                  isTurnRunning = true;
+                  renderer.startTurn();
+                  client.sendMessage(currentSession.id, nextMsg.text).catch((err: any) => {
+                    renderer.stopSpinner();
+                    console.error(theme.fail(`Failed to send queued message: ${err.message}`));
+                    isTurnRunning = false;
+                    rl.prompt();
+                  });
+                  return;
+                }
+              }
               rl.prompt();
             }
             break;
@@ -272,6 +294,20 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
     if (!fullMessage.trim()) {
       rl.prompt();
       return;
+    }
+
+    // Direct Shell Escape (!cmd)
+    if (fullMessage.startsWith('!')) {
+      promptHistory.add(fullMessage);
+      await executeShellEscape(fullMessage);
+      rl.prompt();
+      return;
+    }
+
+    // Long paste chip detection
+    if (pasteChipManager.isLongPaste(fullMessage)) {
+      const chip = pasteChipManager.createChip(fullMessage);
+      console.log(theme.muted(`  ↳ ${pasteChipManager.renderChip(chip)}`));
     }
 
     // 7. Slash Commands
@@ -454,7 +490,16 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
       }
     }
 
-    // 8. Send User Prompt Turn
+    // 8. Non-blocking Input Queuing or Immediate Send
+    if (isTurnRunning) {
+      const q = inputQueue.enqueue(fullMessage);
+      const preview = q.text.slice(0, 40) + (q.text.length > 40 ? '...' : '');
+      console.log(theme.muted(`\n  ↳ [Queued message #${inputQueue.size()}: "${preview}" · Esc to clear queue]\n`));
+      rl.prompt();
+      return;
+    }
+
+    promptHistory.add(fullMessage);
     isTurnRunning = true;
     renderer.startTurn();
     try {
@@ -470,6 +515,11 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
   // 9. Handle SIGINT (Ctrl-C)
   rl.on('SIGINT', async () => {
     renderer.stopSpinner();
+    if (inputQueue.size() > 0) {
+      console.log(theme.warn(`\nCleared ${inputQueue.size()} queued message(s).`));
+      inputQueue.clear();
+    }
+
     if (isTurnRunning) {
       console.log(theme.warn('\nAborting current turn...'));
       try {

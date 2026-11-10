@@ -1,8 +1,7 @@
 import pc from 'picocolors';
-import { theme, getSymbols, isNoColor, isAsciiMode } from './ui/theme.js';
-
-const SPINNER_FRAMES_UTF8 = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const SPINNER_FRAMES_ASCII = ['-', '\\', '|', '/'];
+import { theme, getSymbols, isNoColor } from './ui/theme.js';
+import { BusyIndicator } from './components/status/busy-indicator.js';
+import { StreamBuffer } from './render/stream/buffer.js';
 
 export class EventRenderer {
   private inCodeFence = false;
@@ -10,40 +9,53 @@ export class EventRenderer {
   private currentTool: string | null = null;
   private toolOutputLines: string[] = [];
   private toolStartTime: number = 0;
-  private spinnerTimer: NodeJS.Timeout | null = null;
   private isSpinning = false;
-  private spinnerFrameIdx = 0;
   private turnStartTime: number = 0;
+  private busyIndicator: BusyIndicator;
+  private streamBuffer: StreamBuffer;
+  private unsubBusy?: () => void;
 
-  constructor(private out: (text: string) => void = (t) => process.stdout.write(t)) {}
+  constructor(private out: (text: string) => void = (t) => process.stdout.write(t)) {
+    this.busyIndicator = new BusyIndicator();
+    this.streamBuffer = new StreamBuffer();
+  }
 
   public startTurn(): void {
     this.turnStartTime = Date.now();
+    this.streamBuffer.clear();
     this.startSpinner('Thinking...');
   }
 
   public startSpinner(message: string = 'Thinking...'): void {
     if (this.isSpinning) return;
+    this.isSpinning = true;
+    this.busyIndicator.startWorking(message);
+
     if (isNoColor() || !process.stdout.isTTY) return;
 
-    this.isSpinning = true;
-    this.spinnerFrameIdx = 0;
-    const frames = isAsciiMode() ? SPINNER_FRAMES_ASCII : SPINNER_FRAMES_UTF8;
+    if (this.unsubBusy) this.unsubBusy();
+    this.unsubBusy = this.busyIndicator.onUpdate((rendered) => {
+      if (this.isSpinning && process.stdout.isTTY && !isNoColor()) {
+        process.stdout.write(`\r\x1B[K${rendered} `);
+      }
+    });
+  }
 
-    this.spinnerTimer = setInterval(() => {
-      const frame = frames[this.spinnerFrameIdx % frames.length];
-      this.spinnerFrameIdx++;
-      process.stdout.write(`\r${theme.secondary(frame)} ${theme.muted(message)} `);
-    }, 80);
+  public pauseForUser(message: string = 'Awaiting permission...'): void {
+    this.busyIndicator.pauseForUser(message);
+    if (process.stdout.isTTY && !isNoColor()) {
+      process.stdout.write(`\r\x1B[K${this.busyIndicator.render()}\n`);
+    }
   }
 
   public stopSpinner(): void {
     if (!this.isSpinning) return;
     this.isSpinning = false;
-    if (this.spinnerTimer) {
-      clearInterval(this.spinnerTimer);
-      this.spinnerTimer = null;
+    if (this.unsubBusy) {
+      this.unsubBusy();
+      this.unsubBusy = undefined;
     }
+    this.busyIndicator.finish('done');
     if (process.stdout.isTTY && !isNoColor()) {
       process.stdout.write('\r\x1B[K');
     }
@@ -52,7 +64,8 @@ export class EventRenderer {
   public renderTextDelta(delta: string): void {
     this.stopSpinner();
     const s = getSymbols();
-    const lines = delta.split('\n');
+    const formattedDelta = this.streamBuffer.wrapSynchronized(delta);
+    const lines = formattedDelta.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
@@ -179,7 +192,7 @@ export class EventRenderer {
     summary: string,
     opts?: { canAllowAlways?: boolean; reason?: string },
   ): string {
-    this.stopSpinner();
+    this.pauseForUser('Awaiting permission...');
     return theme.permissionCard({
       tool,
       target: summary,
