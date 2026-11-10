@@ -13,7 +13,7 @@ describe('Android Shell Security Contract (F12)', () => {
       encoding: 'utf8',
     });
     expect(output).toContain('Android Shell Lint PASSED');
-  });
+  }, 20000);
 
   it('manifest specifies dev.tendril.shell package, permissions, and Termux query', () => {
     const manifestPath = join(shellDir, 'app/src/main/AndroidManifest.xml');

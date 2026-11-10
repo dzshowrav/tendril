@@ -2,22 +2,41 @@ import pc from 'picocolors';
 import { theme, getSymbols, isNoColor } from './ui/theme.js';
 import { BusyIndicator } from './components/status/busy-indicator.js';
 import { StreamBuffer } from './render/stream/buffer.js';
+import { ToolCardRegistry } from './components/tool-cards/registry.js';
+import { ApprovalBar } from './components/approval-bar/bar.js';
+import { ThinkingBlock } from './components/thinking/block.js';
+import { resolveActiveTheme, ActiveTheme } from './theme/loader.js';
 
 export class EventRenderer {
   private inCodeFence = false;
   private inThinking = false;
   private currentTool: string | null = null;
+  private currentInput: Record<string, unknown> = {};
   private toolOutputLines: string[] = [];
   private toolStartTime: number = 0;
   private isSpinning = false;
   private turnStartTime: number = 0;
+  private isOutputExpanded = false;
   private busyIndicator: BusyIndicator;
   private streamBuffer: StreamBuffer;
+  private cardRegistry: ToolCardRegistry;
+  private approvalBar: ApprovalBar;
+  private thinkingBlock: ThinkingBlock;
+  private activeTheme: ActiveTheme;
   private unsubBusy?: () => void;
 
   constructor(private out: (text: string) => void = (t) => process.stdout.write(t)) {
-    this.busyIndicator = new BusyIndicator();
+    this.activeTheme = resolveActiveTheme();
+    this.busyIndicator = new BusyIndicator(this.activeTheme);
     this.streamBuffer = new StreamBuffer();
+    this.cardRegistry = new ToolCardRegistry();
+    this.approvalBar = new ApprovalBar(this.activeTheme);
+    this.thinkingBlock = new ThinkingBlock({ theme: this.activeTheme });
+  }
+
+  public toggleOutputExpand(): void {
+    this.isOutputExpanded = !this.isOutputExpanded;
+    this.thinkingBlock.toggleExpand();
   }
 
   public startTurn(): void {
@@ -102,30 +121,21 @@ export class EventRenderer {
 
   public renderToolStart(tool?: string, input?: Record<string, unknown>): void {
     this.stopSpinner();
-    const s = getSymbols();
     const toolName = tool || this.currentTool || 'tool';
     this.currentTool = toolName;
+    this.currentInput = input || {};
     this.toolOutputLines = [];
     this.toolStartTime = Date.now();
 
-    const inp = input || {};
-    let argSummary = '';
-    if (toolName === 'read_file' || toolName === 'write_file' || toolName === 'edit_file') {
-      argSummary = String(inp.path || inp.filePath || '');
-    } else if (toolName === 'list_dir') {
-      argSummary = String(inp.path || '.');
-    } else if (toolName === 'glob' || toolName === 'grep') {
-      argSummary = String(inp.pattern || '');
-    } else if (toolName === 'bash') {
-      argSummary = String(inp.command || '');
-    } else if (toolName === 'web_fetch') {
-      argSummary = String(inp.url || '');
-    } else {
-      argSummary = JSON.stringify(inp);
-    }
-
-    const icon = toolName === 'bash' ? s.gear : toolName.includes('file') ? s.zap : s.tool;
-    this.out(`\n${theme.secondary(`${icon} ${toolName}`)} ${theme.muted(argSummary)}\n`);
+    const card = this.cardRegistry.get(toolName);
+    this.out(
+      card.renderStart({
+        tool: toolName,
+        lifecycle: 'running',
+        input: this.currentInput,
+        theme: this.activeTheme,
+      }),
+    );
   }
 
   public renderToolOutput(chunk: string): void {
@@ -140,18 +150,24 @@ export class EventRenderer {
 
   public renderToolEnd(tool?: string, success?: boolean, summary?: string): void {
     this.stopSpinner();
-    const s = getSymbols();
     const toolName = tool || this.currentTool || 'tool';
     const elapsedMs = this.toolStartTime > 0 ? Date.now() - this.toolStartTime : 0;
-    const timeStr = elapsedMs > 0 ? ` (${elapsedMs}ms)` : '';
-
     const isSuccess = success !== false;
-    if (!isSuccess) {
-      this.out(`  ${theme.fail(summary || 'Tool execution failed')}${theme.muted(timeStr)}\n`);
-    } else {
-      this.out(`  ${theme.muted(`${s.arrow} ${summary || 'Completed'}${timeStr}`)}\n`);
-    }
+
+    const card = this.cardRegistry.get(toolName);
+    this.out(
+      card.renderEnd({
+        tool: toolName,
+        lifecycle: isSuccess ? 'success' : 'error',
+        input: this.currentInput,
+        outputLines: this.toolOutputLines,
+        summary,
+        elapsedMs,
+        theme: this.activeTheme,
+      }),
+    );
     this.currentTool = null;
+    this.currentInput = {};
     this.toolOutputLines = [];
     this.toolStartTime = 0;
   }
@@ -193,11 +209,13 @@ export class EventRenderer {
     opts?: { canAllowAlways?: boolean; reason?: string },
   ): string {
     this.pauseForUser('Awaiting permission...');
-    return theme.permissionCard({
+    return this.approvalBar.render({
+      id: 'req',
       tool,
       target: summary,
       canAllowAlways: opts?.canAllowAlways,
-      reason: opts?.reason,
+      disallowReason: opts?.reason,
+      command: tool === 'bash' ? summary : undefined,
     });
   }
 }
